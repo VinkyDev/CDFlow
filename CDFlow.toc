@@ -1,0 +1,21 @@
+## Interface: 120001, 120000
+## Title: CDFlow
+## Notes: Lightweight Cooldown Manager Beautifier
+## Notes-zhCN: 轻量级冷却管理器美化
+## Notes-zhTW: 輕量級冷卻管理器美化
+## Author: Vinky
+## Version: 1.0.0
+## SavedVariables: CDFlowDB
+## IconTexture: Interface\AddOns\CDFlow\Media\logo
+## Category: Combat
+## Category-zhCN: 战斗
+## Category-zhTW: 戰鬥
+
+Libs\libs.xml
+
+Locales.lua
+Config.lua
+Style.lua
+Layout.lua
+Core.lua
+Settings.lua
