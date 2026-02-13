@@ -54,7 +54,6 @@ local S = {
     -- 高亮特效
     highlight       = { "高亮特效",     "Highlight" },
     hlStyle         = { "特效样式",     "Glow Style" },
-    hlColor         = { "特效颜色",     "Glow Color" },
     hlLines         = { "线条数量",     "Lines" },
     hlFrequency     = { "动画速度",     "Speed" },
     hlThickness     = { "线条粗细",     "Thickness" },
@@ -81,8 +80,6 @@ local S = {
     aboutGithub     = { "GitHub",       "GitHub" },
 
     -- 概览面板
-    overviewUsage   = { "使用方法：在下方各选项卡中配置重要技能、效能技能、增益效果的图标尺寸、间距、布局方向等参数。\n还可在「高亮特效」中自定义技能激活时的发光样式，在「堆叠文字」中调整层数显示。",
-                        "Usage: Configure icon size, spacing, and layout direction for Essential, Utility, and Buff viewers in the tabs below.\nCustomize glow effects in Highlight tab and stack text in Stack Text tab." },
     overviewTip     = { "修改技能美化配置后，建议进入编辑模式调整冷却管理器的「图标列数」和「图标填充」，让框选区域与实际显示区域吻合，以便在编辑模式中调整位置与更智能的自动对齐。",
                         "After changing settings, enter Edit Mode and adjust the cooldown manager's Column Count and Icon Padding so the selection area matches the actual display, for better positioning and smarter auto-snapping." },
 

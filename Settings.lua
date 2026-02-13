@@ -99,16 +99,8 @@ end
 -- 构建「概览」选项卡
 ------------------------------------------------------
 local function BuildGeneralTab(scroll)
-    -- 使用方法
-    AddHeading(scroll, L.general)
 
-    local usage = AceGUI:Create("Label")
-    usage:SetText(L.overviewUsage)
-    usage:SetFullWidth(true)
-    usage:SetFontObject(GameFontHighlight)
-    scroll:AddChild(usage)
-
-    -- Tips 提示（橙色醒目）
+    -- Tips 提示
     local tipGroup = AceGUI:Create("InlineGroup")
     tipGroup:SetTitle("|cffff8800Tips|r")
     tipGroup:SetFullWidth(true)
@@ -133,21 +125,6 @@ local function BuildGeneralTab(scroll)
         function(v) ns.db.borderSize = v end)
 end
 
-local function AddColorPicker(parent, label, getColor, setColor)
-    local w = AceGUI:Create("ColorPicker")
-    w:SetLabel(label)
-    local c = getColor()
-    w:SetColor(c[1] or 1, c[2] or 1, c[3] or 0.3, c[4] or 1)
-    w:SetHasAlpha(true)
-    w:SetFullWidth(true)
-    w:SetCallback("OnValueConfirmed", function(_, _, r, g, b, a)
-        setColor({ r, g, b, a })
-        Layout:RefreshAll()
-    end)
-    parent:AddChild(w)
-    return w
-end
-
 ------------------------------------------------------
 -- 「高亮特效」选项卡
 ------------------------------------------------------
@@ -169,17 +146,6 @@ local function BuildHighlightTab(scroll)
     dd:SetFullWidth(true)
     dd:SetCallback("OnValueChanged", function(_, _, v) cfg.style = v; refreshGlows() end)
     scroll:AddChild(dd)
-
-    -- 颜色
-    local cp = AceGUI:Create("ColorPicker")
-    cp:SetLabel(L.hlColor)
-    cp:SetColor(cfg.color[1], cfg.color[2], cfg.color[3], cfg.color[4])
-    cp:SetHasAlpha(true)
-    cp:SetFullWidth(true)
-    cp:SetCallback("OnValueConfirmed", function(_, _, r, g, b, a)
-        cfg.color = { r, g, b, a }; refreshGlows()
-    end)
-    scroll:AddChild(cp)
 
     -- 像素发光：线条数量
     local s1 = AceGUI:Create("Slider")

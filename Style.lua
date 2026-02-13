@@ -127,7 +127,8 @@ function Style:ShowHighlight(button)
         self:StopGlow(button)
     end
 
-    local c = cfg.color
+    -- 使用固定金黄色（LibCustomGlow 默认色）
+    local c = { 0.95, 0.95, 0.32, 1 }
 
     if cfg.style == "PIXEL" then
         LCG.PixelGlow_Start(button, c, cfg.lines, cfg.frequency,

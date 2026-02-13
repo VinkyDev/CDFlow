@@ -48,7 +48,6 @@ ns.defaults = {
     -- 高亮特效
     highlight = {
         style     = "PIXEL",        -- DEFAULT / PIXEL / AUTOCAST / PROC / BUTTON / NONE
-        color     = { 0.95, 0.95, 0.32, 1 },  -- RGBA 金黄色
         lines     = 8,              -- 像素发光：线条数量
         frequency = 0.2,           -- 动画速度
         thickness = 2,              -- 像素发光：线条粗细
