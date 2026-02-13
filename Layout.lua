@@ -120,7 +120,7 @@ function Layout:RefreshBuffViewer(viewer, cfg)
     -- 应用样式
     for _, icon in ipairs(visible) do
         Style:ApplyIcon(icon, w, h, db.iconZoom, db.borderSize)
-        Style:ApplyStack(icon, db.stack)
+        Style:ApplyStack(icon, cfg.stack)
     end
 
     -- 定位
@@ -213,7 +213,7 @@ function Layout:RefreshCDViewer(viewer, cfg)
         local info = rowInfos[ri]
         for _, icon in ipairs(row) do
             Style:ApplyIcon(icon, info.w, info.h, db.iconZoom, db.borderSize)
-            Style:ApplyStack(icon, db.stack)
+            Style:ApplyStack(icon, cfg.stack)
         end
     end
 

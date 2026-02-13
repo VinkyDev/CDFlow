@@ -31,6 +31,7 @@ local POS_ITEMS = {
     ["TOPRIGHT"]    = L.posTR,
     ["BOTTOMLEFT"]  = L.posBL,
     ["BOTTOMRIGHT"] = L.posBR,
+    ["CENTER"]      = L.posCenter,
 }
 
 local HL_ITEMS = {
@@ -177,6 +178,43 @@ local function BuildHighlightTab(scroll)
 end
 
 ------------------------------------------------------
+-- 「堆叠文字」区块（每个查看器独立配置）
+------------------------------------------------------
+local function BuildStackBlock(scroll, viewerKey)
+    local cfg = ns.db[viewerKey]
+    if not cfg or not cfg.stack then return end
+    local stack = cfg.stack
+
+    AddHeading(scroll, L.stackText)
+
+    AddCheckbox(scroll, L.enable,
+        function() return stack.enabled end,
+        function(v) stack.enabled = v end)
+
+    AddSlider(scroll, L.fontSize, 6, 24, 1,
+        function() return stack.fontSize end,
+        function(v) stack.fontSize = v end)
+
+    AddDropdown(scroll, L.outline, OUTLINE_ITEMS,
+        { "NONE", "OUTLINE", "THICKOUTLINE" },
+        function() return stack.outline end,
+        function(v) stack.outline = v end)
+
+    AddDropdown(scroll, L.position, POS_ITEMS,
+        { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", "CENTER" },
+        function() return stack.point end,
+        function(v) stack.point = v end)
+
+    AddSlider(scroll, L.offsetX, -20, 20, 1,
+        function() return stack.offsetX end,
+        function(v) stack.offsetX = v end)
+
+    AddSlider(scroll, L.offsetY, -20, 20, 1,
+        function() return stack.offsetY end,
+        function(v) stack.offsetY = v end)
+end
+
+------------------------------------------------------
 -- 「行尺寸覆盖」区块
 ------------------------------------------------------
 local function BuildRowOverrides(scroll, viewerKey)
@@ -306,43 +344,11 @@ local function BuildViewerTab(scroll, viewerKey, showPerRow)
         function() return cfg.spacingY end,
         function(v) cfg.spacingY = v end)
 
-    -- 特色功能：行尺寸覆盖
+    -- 堆叠文字（每个查看器独立配置）
+    BuildStackBlock(scroll, viewerKey)
+
+    -- 行尺寸覆盖
     BuildRowOverrides(scroll, viewerKey)
-end
-
-------------------------------------------------------
--- 「堆叠文字」选项卡
-------------------------------------------------------
-local function BuildStackTab(scroll)
-    local cfg = ns.db.stack
-
-    AddHeading(scroll, L.stackText)
-
-    AddCheckbox(scroll, L.enable,
-        function() return cfg.enabled end,
-        function(v) cfg.enabled = v end)
-
-    AddSlider(scroll, L.fontSize, 6, 24, 1,
-        function() return cfg.fontSize end,
-        function(v) cfg.fontSize = v end)
-
-    AddDropdown(scroll, L.outline, OUTLINE_ITEMS,
-        { "NONE", "OUTLINE", "THICKOUTLINE" },
-        function() return cfg.outline end,
-        function(v) cfg.outline = v end)
-
-    AddDropdown(scroll, L.position, POS_ITEMS,
-        { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" },
-        function() return cfg.point end,
-        function(v) cfg.point = v end)
-
-    AddSlider(scroll, L.offsetX, -20, 20, 1,
-        function() return cfg.offsetX end,
-        function(v) cfg.offsetX = v end)
-
-    AddSlider(scroll, L.offsetY, -20, 20, 1,
-        function() return cfg.offsetY end,
-        function(v) cfg.offsetY = v end)
 end
 
 ------------------------------------------------------
@@ -354,7 +360,6 @@ local TAB_LIST = {
     { value = "utility",   text = L.utility },
     { value = "buffs",     text = L.buffs },
     { value = "highlight", text = L.highlight },
-    { value = "stack",     text = L.stackText },
 }
 
 local function OnTabSelected(container, _, group)
@@ -377,8 +382,6 @@ local function OnTabSelected(container, _, group)
         BuildViewerTab(scroll, "buffs", false)
     elseif group == "highlight" then
         BuildHighlightTab(scroll)
-    elseif group == "stack" then
-        BuildStackTab(scroll)
     end
 
     -- 延迟一帧重新布局，确保嵌套容器高度计算正确

@@ -19,6 +19,14 @@ ns.defaults = {
         spacingX    = 2,
         spacingY    = 2,
         rowOverrides = {},          -- [行号] = {width, height}
+        stack = {
+            enabled  = false,
+            fontSize = 12,
+            outline  = "OUTLINE",   -- NONE / OUTLINE / THICKOUTLINE
+            point    = "BOTTOMRIGHT",
+            offsetX  = 0,
+            offsetY  = 0,
+        },
     },
 
     -- 工具技能查看器
@@ -31,6 +39,14 @@ ns.defaults = {
         spacingX    = 2,
         spacingY    = 2,
         rowOverrides = {},
+        stack = {
+            enabled  = false,
+            fontSize = 12,
+            outline  = "OUTLINE",
+            point    = "BOTTOMRIGHT",
+            offsetX  = 0,
+            offsetY  = 0,
+        },
     },
 
     -- 增益图标查看器
@@ -43,6 +59,14 @@ ns.defaults = {
         spacingX    = 2,
         spacingY    = 2,
         rowOverrides = {},
+        stack = {
+            enabled  = false,
+            fontSize = 12,
+            outline  = "OUTLINE",
+            point    = "BOTTOMRIGHT",
+            offsetX  = 0,
+            offsetY  = 0,
+        },
     },
 
     -- 高亮特效
@@ -54,15 +78,6 @@ ns.defaults = {
         scale     = 1,              -- 自动施法：缩放
     },
 
-    -- 堆叠文字
-    stack = {
-        enabled     = false,
-        fontSize    = 12,
-        outline     = "OUTLINE",    -- NONE / OUTLINE / THICKOUTLINE
-        point       = "BOTTOMRIGHT",
-        offsetX     = 0,            -- X 偏移（像素）
-        offsetY     = 0,            -- Y 偏移（像素）
-    },
 }
 
 -- 深拷贝
@@ -90,6 +105,16 @@ function ns:LoadConfig()
         CDFlowDB = DeepCopy(self.defaults)
     else
         DeepMerge(CDFlowDB, self.defaults)
+        -- 迁移：旧版全局 stack 转为各查看器独立配置
+        if CDFlowDB.stack and type(CDFlowDB.stack) == "table" then
+            local old = CDFlowDB.stack
+            for _, key in ipairs({ "essential", "utility", "buffs" }) do
+                if CDFlowDB[key] then
+                    CDFlowDB[key].stack = DeepCopy(old)
+                end
+            end
+            CDFlowDB.stack = nil
+        end
     end
     self.db = CDFlowDB
 end

@@ -50,6 +50,7 @@ local S = {
     posTR           = { "右上",         "Top Right" },
     posBL           = { "左下",         "Bottom Left" },
     posBR           = { "右下",         "Bottom Right" },
+    posCenter       = { "居中",         "Center" },
 
     -- 高亮特效
     highlight       = { "高亮特效",     "Highlight" },
