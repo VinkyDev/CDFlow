@@ -96,6 +96,18 @@ local function AddDropdown(parent, label, items, order, getValue, setValue)
     return w
 end
 
+local function AddGlowSlider(parent, label, minVal, maxVal, step, value, onChanged)
+    local w = AceGUI:Create("Slider")
+    w:SetLabel(label)
+    w:SetSliderValues(minVal, maxVal, step)
+    w:SetValue(value)
+    w:SetIsPercent(false)
+    w:SetFullWidth(true)
+    w:SetCallback("OnValueChanged", function(_, _, v) onChanged(v) end)
+    parent:AddChild(w)
+    return w
+end
+
 ------------------------------------------------------
 -- 构建「概览」选项卡
 ------------------------------------------------------
@@ -127,54 +139,148 @@ local function BuildGeneralTab(scroll)
 end
 
 ------------------------------------------------------
+-- 根据高亮样式动态构建选项控件
+------------------------------------------------------
+local function BuildStyleOptions(parent, cfg, onChanged)
+    local style = cfg.style
+    if style == "DEFAULT" or style == "NONE" or style == "PROC" then
+        return
+    end
+
+    if style == "PIXEL" then
+        AddGlowSlider(parent, L.hlLines, 1, 16, 1, cfg.lines, function(v)
+            cfg.lines = v
+            onChanged()
+        end)
+        AddGlowSlider(parent, L.hlThickness, 1, 5, 1, cfg.thickness, function(v)
+            cfg.thickness = v
+            onChanged()
+        end)
+    end
+
+    if style == "PIXEL" or style == "AUTOCAST" or style == "BUTTON" then
+        AddGlowSlider(parent, L.hlFrequency, 0.05, 1, 0.05, cfg.frequency, function(v)
+            cfg.frequency = v
+            onChanged()
+        end)
+    end
+
+    if style == "AUTOCAST" then
+        AddGlowSlider(parent, L.hlScale, 0.5, 2, 0.1, cfg.scale, function(v)
+            cfg.scale = v
+            onChanged()
+        end)
+    end
+end
+
+------------------------------------------------------
 -- 「高亮特效」选项卡
 ------------------------------------------------------
 local function BuildHighlightTab(scroll)
     local cfg = ns.db.highlight
+    local buffCfg = ns.db.buffGlow
 
-    -- 设置变更后刷新所有活跃的高亮特效
-    local function refreshGlows()
+    local function refreshSkillGlows()
         Style:RefreshAllGlows()
     end
 
-    AddHeading(scroll, L.highlight)
+    -- 增益开关变更：需全量刷新布局
+    local function refreshBuffLayout()
+        Layout:RefreshViewer("BuffIconCooldownViewer")
+    end
 
-    -- 样式选择
-    local dd = AceGUI:Create("Dropdown")
-    dd:SetLabel(L.hlStyle)
-    dd:SetList(HL_ITEMS, { "DEFAULT", "PIXEL", "AUTOCAST", "PROC", "BUTTON", "NONE" })
-    dd:SetValue(cfg.style)
-    dd:SetFullWidth(true)
-    dd:SetCallback("OnValueChanged", function(_, _, v) cfg.style = v; refreshGlows() end)
-    scroll:AddChild(dd)
+    -- 增益样式/参数变更：立即刷新特效（与技能高亮一致）
+    local function refreshBuffGlowStyle()
+        Style:RefreshAllBuffGlows()
+    end
 
-    -- 像素发光：线条数量
-    local s1 = AceGUI:Create("Slider")
-    s1:SetLabel(L.hlLines); s1:SetSliderValues(1, 16, 1)
-    s1:SetValue(cfg.lines); s1:SetFullWidth(true)
-    s1:SetCallback("OnValueChanged", function(_, _, v) cfg.lines = v; refreshGlows() end)
-    scroll:AddChild(s1)
+    local scrollLayoutPending = false
+    local function refreshScrollLayout()
+        if scrollLayoutPending then return end
+        scrollLayoutPending = true
+        C_Timer.After(0, function()
+            scrollLayoutPending = false
+            if scroll and scroll.DoLayout then scroll:DoLayout() end
+        end)
+    end
 
-    -- 像素发光：线条粗细
-    local s2 = AceGUI:Create("Slider")
-    s2:SetLabel(L.hlThickness); s2:SetSliderValues(1, 5, 1)
-    s2:SetValue(cfg.thickness); s2:SetFullWidth(true)
-    s2:SetCallback("OnValueChanged", function(_, _, v) cfg.thickness = v; refreshGlows() end)
-    scroll:AddChild(s2)
+    -- 技能激活高亮
+    AddHeading(scroll, L.skillGlow)
 
-    -- 动画速度
-    local s3 = AceGUI:Create("Slider")
-    s3:SetLabel(L.hlFrequency); s3:SetSliderValues(0.05, 1, 0.05)
-    s3:SetValue(cfg.frequency); s3:SetFullWidth(true)
-    s3:SetCallback("OnValueChanged", function(_, _, v) cfg.frequency = v; refreshGlows() end)
-    scroll:AddChild(s3)
+    local skillStyleDD = AceGUI:Create("Dropdown")
+    skillStyleDD:SetLabel(L.hlStyle)
+    skillStyleDD:SetList(HL_ITEMS, { "DEFAULT", "PIXEL", "AUTOCAST", "PROC", "BUTTON", "NONE" })
+    skillStyleDD:SetValue(cfg.style)
+    skillStyleDD:SetFullWidth(true)
+    scroll:AddChild(skillStyleDD)
 
-    -- 自动施法：缩放
-    local s4 = AceGUI:Create("Slider")
-    s4:SetLabel(L.hlScale); s4:SetSliderValues(0.5, 2, 0.1)
-    s4:SetValue(cfg.scale); s4:SetFullWidth(true)
-    s4:SetCallback("OnValueChanged", function(_, _, v) cfg.scale = v; refreshGlows() end)
-    scroll:AddChild(s4)
+    local skillOptGroup = AceGUI:Create("InlineGroup")
+    skillOptGroup:SetLayout("Flow")
+    skillOptGroup:SetFullWidth(true)
+    scroll:AddChild(skillOptGroup)
+
+    local function RebuildSkillOptions()
+        skillOptGroup:ReleaseChildren()
+        BuildStyleOptions(skillOptGroup, cfg, refreshSkillGlows)
+        refreshScrollLayout()
+    end
+
+    skillStyleDD:SetCallback("OnValueChanged", function(_, _, v)
+        cfg.style = v
+        RebuildSkillOptions()
+        refreshSkillGlows()
+    end)
+    RebuildSkillOptions()
+
+    -- 增益高亮
+    AddHeading(scroll, L.buffGlow)
+
+    -- 前置声明，避免回调里引用到全局同名变量
+    local buffOptGroup
+    local RebuildBuffOptions
+
+    local buffEnableCB = AceGUI:Create("CheckBox")
+    buffEnableCB:SetLabel(L.enableBuffGlow)
+    buffEnableCB:SetValue(buffCfg.enabled)
+    buffEnableCB:SetFullWidth(true)
+    buffEnableCB:SetCallback("OnValueChanged", function(_, _, v)
+        buffCfg.enabled = v
+        refreshBuffLayout()
+        if v then RebuildBuffOptions() else buffOptGroup:ReleaseChildren() end
+        refreshScrollLayout()
+    end)
+    scroll:AddChild(buffEnableCB)
+
+    buffOptGroup = AceGUI:Create("InlineGroup")
+    buffOptGroup:SetLayout("Flow")
+    buffOptGroup:SetFullWidth(true)
+    scroll:AddChild(buffOptGroup)
+
+    RebuildBuffOptions = function()
+        buffOptGroup:ReleaseChildren()
+        if not buffCfg.enabled then refreshScrollLayout(); return end
+
+        local dd = AceGUI:Create("Dropdown")
+        dd:SetLabel(L.hlStyle)
+        dd:SetList(HL_ITEMS, { "DEFAULT", "PIXEL", "AUTOCAST", "PROC", "BUTTON", "NONE" })
+        dd:SetValue(buffCfg.style)
+        dd:SetFullWidth(true)
+        dd:SetCallback("OnValueChanged", function(_, _, v)
+            buffCfg.style = v
+            RebuildBuffOptions()
+            refreshBuffGlowStyle()
+        end)
+        buffOptGroup:AddChild(dd)
+
+        BuildStyleOptions(buffOptGroup, buffCfg, refreshBuffGlowStyle)
+        refreshScrollLayout()
+    end
+
+    if buffCfg.enabled then
+        RebuildBuffOptions()
+    end
+
+    refreshScrollLayout()
 end
 
 ------------------------------------------------------
@@ -310,7 +416,7 @@ end
 ------------------------------------------------------
 -- 「查看器」选项卡
 ------------------------------------------------------
-local function BuildViewerTab(scroll, viewerKey, showPerRow)
+local function BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRow)
     local cfg = ns.db[viewerKey]
 
     AddCheckbox(scroll, L.enable,
@@ -323,9 +429,18 @@ local function BuildViewerTab(scroll, viewerKey, showPerRow)
         function(v) cfg.growDir = v end)
 
     if showPerRow then
-        AddSlider(scroll, L.iconsPerRow, 1, 12, 1,
+        local minPerRow = allowUnlimitedPerRow and 0 or 1
+        local maxPerRow = 20
+        AddSlider(scroll, L.iconsPerRow, minPerRow, maxPerRow, 1,
             function() return cfg.iconsPerRow end,
             function(v) cfg.iconsPerRow = v end)
+        if allowUnlimitedPerRow then
+            local tip = AceGUI:Create("Label")
+            tip:SetText("|cffaaaaaa" .. L.iconsPerRowTip .. "|r")
+            tip:SetFullWidth(true)
+            tip:SetFontObject(GameFontHighlightSmall)
+            scroll:AddChild(tip)
+        end
     end
 
     AddSlider(scroll, L.iconWidth, 16, 80, 1,
@@ -375,11 +490,11 @@ local function OnTabSelected(container, _, group)
     if group == "general" then
         BuildGeneralTab(scroll)
     elseif group == "essential" then
-        BuildViewerTab(scroll, "essential", true)
+        BuildViewerTab(scroll, "essential", true, false)
     elseif group == "utility" then
-        BuildViewerTab(scroll, "utility", true)
+        BuildViewerTab(scroll, "utility", true, false)
     elseif group == "buffs" then
-        BuildViewerTab(scroll, "buffs", false)
+        BuildViewerTab(scroll, "buffs", true, true)
     elseif group == "highlight" then
         BuildHighlightTab(scroll)
     end
@@ -473,10 +588,16 @@ function ns:InitSettings()
         title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 14, -4)
         title:SetText("|cff00ccffCDFlow|r")
 
-        -- 版本号
+        -- 版本号（兼容新旧 API，从 TOC 读取）
+        local version = "1.1.0"
+        if C_AddOns and C_AddOns.GetAddOnMetadata then
+            version = C_AddOns.GetAddOnMetadata("CDFlow", "Version") or version
+        elseif GetAddOnMetadata then
+            version = GetAddOnMetadata("CDFlow", "Version") or version
+        end
         local ver = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         ver:SetPoint("LEFT", title, "RIGHT", 8, 0)
-        ver:SetText("|cff888888v1.0.0|r")
+        ver:SetText("|cff888888v" .. version .. "|r")
 
         -- 简介
         local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

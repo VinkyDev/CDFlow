@@ -69,13 +69,23 @@ ns.defaults = {
         },
     },
 
-    -- 高亮特效
+    -- 高亮特效（技能激活）
     highlight = {
         style     = "PIXEL",        -- DEFAULT / PIXEL / AUTOCAST / PROC / BUTTON / NONE
         lines     = 8,              -- 像素发光：线条数量
-        frequency = 0.2,           -- 动画速度
+        frequency = 0.2,             -- 动画速度
         thickness = 2,              -- 像素发光：线条粗细
         scale     = 1,              -- 自动施法：缩放
+    },
+
+    -- Buff 增益高亮（所有 buff 显示时高亮）
+    buffGlow = {
+        enabled   = false,
+        style     = "PIXEL",        -- 同 highlight
+        lines     = 8,
+        frequency = 0.2,
+        thickness = 2,
+        scale     = 1,
     },
 
 }

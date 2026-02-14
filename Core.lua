@@ -8,29 +8,35 @@ local Layout = ns.Layout
 local Style  = ns.Style
 local L = ns.L
 
+-- Buff 图标子帧 Hook（防抖：避免 OnActiveStateChanged 等频繁触发导致闪烁）
 ------------------------------------------------------
--- Buff 图标子帧 Hook
-------------------------------------------------------
+local buffRefreshPending = false
+
+local function RequestBuffViewerRefresh()
+    if buffRefreshPending then return end
+    buffRefreshPending = true
+    C_Timer.After(0.05, function()
+        buffRefreshPending = false
+        Layout:RefreshViewer("BuffIconCooldownViewer")
+    end)
+end
+
 local function HookBuffChildren()
     local viewer = BuffIconCooldownViewer
     if not viewer then return end
-
-    local refreshBuffs = function()
-        Layout:RefreshViewer("BuffIconCooldownViewer")
-    end
 
     local children = { viewer:GetChildren() }
     for _, child in ipairs(children) do
         if child and child.Icon and not child._cdf_hooked then
             child._cdf_hooked = true
             if child.OnActiveStateChanged then
-                hooksecurefunc(child, "OnActiveStateChanged", refreshBuffs)
+                hooksecurefunc(child, "OnActiveStateChanged", RequestBuffViewerRefresh)
             end
             if child.OnUnitAuraAddedEvent then
-                hooksecurefunc(child, "OnUnitAuraAddedEvent", refreshBuffs)
+                hooksecurefunc(child, "OnUnitAuraAddedEvent", RequestBuffViewerRefresh)
             end
             if child.OnUnitAuraRemovedEvent then
-                hooksecurefunc(child, "OnUnitAuraRemovedEvent", refreshBuffs)
+                hooksecurefunc(child, "OnUnitAuraRemovedEvent", RequestBuffViewerRefresh)
             end
         end
     end
@@ -101,18 +107,27 @@ end
 ------------------------------------------------------
 -- EventRegistry 回调：响应冷却管理器设置变更
 ------------------------------------------------------
+local refreshAllPending = false
+
+local function RequestRefreshAll(delay)
+    if refreshAllPending then return end
+    refreshAllPending = true
+    C_Timer.After(delay or 0, function()
+        refreshAllPending = false
+        Layout:RefreshAll()
+    end)
+end
+
 local function RegisterEventRegistryCallbacks()
-    -- 冷却管理器数据变更（用户在原生设置中修改）
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
-        C_Timer.After(0, function() Layout:RefreshAll() end)
+        RequestRefreshAll(0)
     end)
 
-    -- 编辑模式进出
     EventRegistry:RegisterCallback("EditMode.Enter", function()
-        C_Timer.After(0, function() Layout:RefreshAll() end)
+        RequestRefreshAll(0)
     end)
     EventRegistry:RegisterCallback("EditMode.Exit", function()
-        C_Timer.After(0, function() Layout:RefreshAll() end)
+        RequestRefreshAll(0)
     end)
 end
 
@@ -123,23 +138,20 @@ local eventFrame = CreateFrame("Frame")
 local eventHandlers = {}
 
 eventHandlers["PLAYER_ENTERING_WORLD"] = function()
-    C_Timer.After(0, function()
-        Layout:RefreshAll()
-        -- 延迟二次刷新，确保所有框架就绪
-        C_Timer.After(0.5, function() Layout:RefreshAll() end)
-    end)
+    RequestRefreshAll(0)
+    C_Timer.After(0.5, function() Layout:RefreshAll() end)
 end
 
 eventHandlers["EDIT_MODE_LAYOUTS_UPDATED"] = function()
-    C_Timer.After(0, function() Layout:RefreshAll() end)
+    RequestRefreshAll(0)
 end
 
 eventHandlers["PLAYER_SPECIALIZATION_CHANGED"] = function()
-    C_Timer.After(0, function() Layout:RefreshAll() end)
+    RequestRefreshAll(0)
 end
 
 eventHandlers["TRAIT_CONFIG_UPDATED"] = function()
-    C_Timer.After(0, function() Layout:RefreshAll() end)
+    RequestRefreshAll(0)
 end
 
 -- 注册所有事件

@@ -9,67 +9,107 @@ ns.Style = Style
 
 local SQUARE_MASK = "Interface\\BUTTONS\\WHITE8X8"
 local DEFAULT_FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+local ROUND_MASK_TEX = 6707800
+local GLOW_COLOR = { 0.95, 0.95, 0.32, 1 }
 
 local _issecretvalue = issecretvalue or function() return false end
+
+local function EnsureIconCaches(button)
+    if button._cdf_cacheReady then return end
+
+    button._cdf_swipes = {}
+    for i = 1, select("#", button:GetChildren()) do
+        local child = select(i, button:GetChildren())
+        if child and child.SetSwipeTexture then
+            button._cdf_swipes[#button._cdf_swipes + 1] = child
+        end
+    end
+
+    button._cdf_overlayRegions = {}
+    button._cdf_roundMaskRegions = {}
+    for _, region in next, { button:GetRegions() } do
+        if region:IsObjectType("Texture") then
+            local atlas = region.GetAtlas and region:GetAtlas()
+            if atlas == "UI-HUD-CoolDownManager-IconOverlay" then
+                button._cdf_overlayRegions[#button._cdf_overlayRegions + 1] = region
+            end
+            local tex = region:GetTexture()
+            if not _issecretvalue(tex) and tex == ROUND_MASK_TEX then
+                button._cdf_roundMaskRegions[#button._cdf_roundMaskRegions + 1] = region
+            end
+        end
+    end
+
+    button._cdf_cacheReady = true
+end
 
 ------------------------------------------------------
 -- 图标样式
 ------------------------------------------------------
 function Style:ApplyIcon(button, w, h, zoom, borderSize)
     if not button or not button.Icon then return end
+    EnsureIconCaches(button)
 
-    -- 设置图标尺寸
-    button:SetSize(w, h)
+    if button._cdf_w ~= w or button._cdf_h ~= h then
+        button:SetSize(w, h)
+        button._cdf_w = w
+        button._cdf_h = h
+    end
 
-    -- 纹理裁剪（去除圆形边缘）
     local crop = zoom * 0.5
     local ratio = w / h
-    button.Icon:ClearAllPoints()
-    button.Icon:SetAllPoints(button)
-    if button.Icon.SetTexCoord then
+    if not button._cdf_iconAnchored then
+        button.Icon:ClearAllPoints()
+        button.Icon:SetAllPoints(button)
+        button._cdf_iconAnchored = true
+    end
+    if button.Icon.SetTexCoord
+        and (button._cdf_crop ~= crop or button._cdf_ratio ~= ratio) then
         button.Icon:SetTexCoord(crop, 1 - crop, crop * ratio, 1 - crop * ratio)
+        button._cdf_crop = crop
+        button._cdf_ratio = ratio
     end
 
-    -- 冷却扫过纹理替换为方形
-    for i = 1, select("#", button:GetChildren()) do
-        local child = select(i, button:GetChildren())
-        if child and child.SetSwipeTexture then
-            child:SetSwipeTexture(SQUARE_MASK)
-            child:ClearAllPoints()
-            child:SetPoint("TOPLEFT", button, "TOPLEFT", borderSize, -borderSize)
-            child:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -borderSize, borderSize)
+    for _, swipe in ipairs(button._cdf_swipes) do
+        if not swipe._cdf_squareSwipe then
+            swipe:SetSwipeTexture(SQUARE_MASK)
+            swipe._cdf_squareSwipe = true
+        end
+        if swipe._cdf_borderSize ~= borderSize then
+            swipe:ClearAllPoints()
+            swipe:SetPoint("TOPLEFT", button, "TOPLEFT", borderSize, -borderSize)
+            swipe:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -borderSize, borderSize)
+            swipe._cdf_borderSize = borderSize
         end
     end
 
-    -- 隐藏原生圆形覆盖层
-    for _, region in next, { button:GetRegions() } do
-        if region:IsObjectType("Texture") then
-            local atlas = region.GetAtlas and region:GetAtlas()
-            if atlas == "UI-HUD-CoolDownManager-IconOverlay" then
-                region:SetAlpha(0)
-            end
-            -- 替换圆形遮罩纹理（需安全检查 secretvalue）
-            local tex = region:GetTexture()
-            if not _issecretvalue(tex) and tex == 6707800 then
-                region:SetTexture(SQUARE_MASK)
-                region._cdf_replaced = true
-            end
+    for _, region in ipairs(button._cdf_overlayRegions) do
+        if region:GetAlpha() ~= 0 then
+            region:SetAlpha(0)
+        end
+    end
+    for _, region in ipairs(button._cdf_roundMaskRegions) do
+        if not region._cdf_replaced then
+            region:SetTexture(SQUARE_MASK)
+            region._cdf_replaced = true
         end
     end
 
-    -- 创建/更新像素边框
     if borderSize > 0 then
         if not button._cdf_border then
             button._cdf_border = CreateFrame("Frame", nil, button, "BackdropTemplate")
             button._cdf_border:SetFrameLevel(button:GetFrameLevel() + 1)
+            button._cdf_border:ClearAllPoints()
+            button._cdf_border:SetAllPoints(button)
         end
-        button._cdf_border:ClearAllPoints()
-        button._cdf_border:SetAllPoints(button)
-        button._cdf_border:SetBackdrop({
-            edgeFile = SQUARE_MASK,
-            edgeSize = borderSize,
-        })
-        button._cdf_border:SetBackdropBorderColor(0, 0, 0, 1)
+        if button._cdf_borderSize ~= borderSize then
+            button._cdf_border:SetBackdrop({
+                edgeFile = SQUARE_MASK,
+                edgeSize = borderSize,
+            })
+            button._cdf_border:SetBackdropBorderColor(0, 0, 0, 1)
+            button._cdf_borderSize = borderSize
+        end
         button._cdf_border:Show()
     elseif button._cdf_border then
         button._cdf_border:Hide()
@@ -84,7 +124,9 @@ end
 
 local LCG  -- LibCustomGlow 延迟加载引用
 local GLOW_KEY = "CDFlow"
-local activeGlowFrames = {}  -- 追踪当前有高亮的图标
+local GLOW_KEY_BUFF = "CDFlowBuff"
+local activeGlowFrames = {}   -- 追踪技能激活高亮
+local activeBuffGlowFrames = {}  -- 追踪 Buff 高亮
 
 -- 隐藏游戏原生的技能激活高亮
 function Style:HideOriginalGlow(button)
@@ -127,22 +169,19 @@ function Style:ShowHighlight(button)
         self:StopGlow(button)
     end
 
-    -- 使用固定金黄色（LibCustomGlow 默认色）
-    local c = { 0.95, 0.95, 0.32, 1 }
-
     if cfg.style == "PIXEL" then
-        LCG.PixelGlow_Start(button, c, cfg.lines, cfg.frequency,
+        LCG.PixelGlow_Start(button, GLOW_COLOR, cfg.lines, cfg.frequency,
             nil, cfg.thickness, 0, 0, false, GLOW_KEY, 1)
     elseif cfg.style == "AUTOCAST" then
-        LCG.AutoCastGlow_Start(button, c, nil, cfg.frequency,
+        LCG.AutoCastGlow_Start(button, GLOW_COLOR, nil, cfg.frequency,
             cfg.scale, 0, 0, GLOW_KEY, 1)
     elseif cfg.style == "PROC" then
         LCG.ProcGlow_Start(button, {
-            color = c, key = GLOW_KEY, frameLevel = 1,
+            color = GLOW_COLOR, key = GLOW_KEY, frameLevel = 1,
             startAnim = true, duration = 1,
         })
     elseif cfg.style == "BUTTON" then
-        LCG.ButtonGlow_Start(button, c, cfg.frequency, 1)
+        LCG.ButtonGlow_Start(button, GLOW_COLOR, cfg.frequency, 1)
     end
 
     button._cdf_glowType = cfg.style
@@ -187,6 +226,87 @@ function Style:RefreshAllGlows()
 end
 
 ------------------------------------------------------
+-- Buff 增益高亮模块
+------------------------------------------------------
+function Style:ShowBuffGlow(button)
+    local cfg = ns.db and ns.db.buffGlow
+    if not cfg or not cfg.enabled or not button then return end
+
+    activeBuffGlowFrames[button] = true
+
+    if cfg.style == "NONE" then
+        self:StopBuffGlow(button)
+        return
+    end
+
+    if cfg.style == "DEFAULT" then
+        self:StopBuffGlow(button)
+        return
+    end
+
+    if not LCG then
+        LCG = LibStub("LibCustomGlow-1.0", true)
+        if not LCG then return end
+    end
+
+    if button._cdf_buffGlowType and button._cdf_buffGlowType ~= cfg.style then
+        self:StopBuffGlow(button)
+    end
+
+    if cfg.style == "PIXEL" then
+        LCG.PixelGlow_Start(button, GLOW_COLOR, cfg.lines, cfg.frequency,
+            nil, cfg.thickness, 0, 0, false, GLOW_KEY_BUFF, 1)
+    elseif cfg.style == "AUTOCAST" then
+        LCG.AutoCastGlow_Start(button, GLOW_COLOR, nil, cfg.frequency,
+            cfg.scale, 0, 0, GLOW_KEY_BUFF, 1)
+    elseif cfg.style == "PROC" then
+        LCG.ProcGlow_Start(button, {
+            color = GLOW_COLOR, key = GLOW_KEY_BUFF, frameLevel = 1,
+            startAnim = true, duration = 1,
+        })
+    elseif cfg.style == "BUTTON" then
+        LCG.ButtonGlow_Start(button, GLOW_COLOR, cfg.frequency, 1)
+    end
+
+    button._cdf_buffGlowType = cfg.style
+    button._cdf_buffGlowActive = true
+end
+
+function Style:StopBuffGlow(button)
+    if not LCG or not button._cdf_buffGlowType then return end
+
+    if button._cdf_buffGlowType == "PIXEL" then
+        LCG.PixelGlow_Stop(button, GLOW_KEY_BUFF)
+    elseif button._cdf_buffGlowType == "AUTOCAST" then
+        LCG.AutoCastGlow_Stop(button, GLOW_KEY_BUFF)
+    elseif button._cdf_buffGlowType == "PROC" then
+        LCG.ProcGlow_Stop(button, GLOW_KEY_BUFF)
+    elseif button._cdf_buffGlowType == "BUTTON" then
+        LCG.ButtonGlow_Stop(button)
+    end
+
+    button._cdf_buffGlowType = nil
+    button._cdf_buffGlowActive = nil
+end
+
+function Style:HideBuffGlow(button)
+    if not button then return end
+    activeBuffGlowFrames[button] = nil
+    self:StopBuffGlow(button)
+end
+
+function Style:RefreshAllBuffGlows()
+    local frames = {}
+    for frame in pairs(activeBuffGlowFrames) do
+        frames[#frames + 1] = frame
+    end
+    for _, frame in ipairs(frames) do
+        self:StopBuffGlow(frame)
+        self:ShowBuffGlow(frame)
+    end
+end
+
+------------------------------------------------------
 -- 堆叠文字样式模块
 ------------------------------------------------------
 function Style:ApplyStack(button, cfg)
@@ -208,7 +328,18 @@ function Style:ApplyStack(button, cfg)
     if not fs then return end
 
     local flag = (cfg.outline == "NONE") and "" or cfg.outline
-    fs:SetFont(DEFAULT_FONT, cfg.fontSize, flag)
-    fs:ClearAllPoints()
-    fs:SetPoint(cfg.point, button, cfg.point, cfg.offsetX or 0, cfg.offsetY or 0)
+    if fs._cdf_fontSize ~= cfg.fontSize or fs._cdf_outline ~= flag then
+        fs:SetFont(DEFAULT_FONT, cfg.fontSize, flag)
+        fs._cdf_fontSize = cfg.fontSize
+        fs._cdf_outline = flag
+    end
+
+    local ox, oy = cfg.offsetX or 0, cfg.offsetY or 0
+    if fs._cdf_point ~= cfg.point or fs._cdf_ox ~= ox or fs._cdf_oy ~= oy then
+        fs:ClearAllPoints()
+        fs:SetPoint(cfg.point, button, cfg.point, ox, oy)
+        fs._cdf_point = cfg.point
+        fs._cdf_ox = ox
+        fs._cdf_oy = oy
+    end
 end

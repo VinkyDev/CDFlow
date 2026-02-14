@@ -24,6 +24,7 @@ local S = {
     enable          = { "启用美化",     "Enable" },
     growDir         = { "布局方向",     "Layout Direction" },
     iconsPerRow     = { "每行数量",     "Icons Per Row" },
+    iconsPerRowTip  = { "0 = 不限制，单行/单列显示。推荐设为 0。", "0 = unlimited, single row/column. Recommended: 0." },
     iconWidth       = { "图标宽度",     "Icon Width" },
     iconHeight      = { "图标高度",     "Icon Height" },
     spacingX        = { "列间距",       "Column Spacing" },
@@ -54,6 +55,9 @@ local S = {
 
     -- 高亮特效
     highlight       = { "高亮特效",     "Highlight" },
+    skillGlow       = { "技能激活高亮", "Skill Glow" },
+    buffGlow        = { "增益高亮",     "Buff Glow" },
+    enableBuffGlow  = { "开启 Buff 高亮显示", "Enable Buff Glow" },
     hlStyle         = { "特效样式",     "Glow Style" },
     hlLines         = { "线条数量",     "Lines" },
     hlFrequency     = { "动画速度",     "Speed" },
