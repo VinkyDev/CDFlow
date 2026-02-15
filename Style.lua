@@ -307,6 +307,163 @@ function Style:RefreshAllBuffGlows()
 end
 
 ------------------------------------------------------
+-- 键位显示模块（基于 C_CooldownViewer + 动作条绑定映射）
+------------------------------------------------------
+local spellToKeyCache = {}
+local KEYBIND_BAR_PREFIXES = {
+    "ActionButton",
+    "MultiBarBottomLeftButton",
+    "MultiBarBottomRightButton",
+    "MultiBarRightButton",
+    "MultiBarLeftButton",
+}
+local KEYBIND_BINDING_NAMES = {
+    "ACTIONBUTTON",
+    "MULTIACTIONBAR1BUTTON",
+    "MULTIACTIONBAR2BUTTON",
+    "MULTIACTIONBAR4BUTTON",
+    "MULTIACTIONBAR3BUTTON",
+}
+
+local function FormatKeyForDisplay(raw)
+    if not raw or raw == "" or raw == "●" then return "" end
+    local s = raw:upper()
+    s = s:gsub("SHIFT%-", "S-")
+    s = s:gsub("CTRL%-", "C-")
+    s = s:gsub("ALT%-", "A-")
+    s = s:gsub("META%-", "M-")
+    s = s:gsub("STRG%-", "C-")
+    s = s:gsub("MOUSE%s?WHEEL%s?UP", "MWU")
+    s = s:gsub("MOUSE%s?WHEEL%s?DOWN", "MWD")
+    s = s:gsub("MOUSE%s?BUTTON%s?(%d+)", "M%1")
+    s = s:gsub("NUMPAD%s?", "N")
+    s = s:gsub("PAGE%s?UP", "PgUp")
+    s = s:gsub("PAGE%s?DOWN", "PgDn")
+    s = s:gsub("SPACEBAR", "Spc")
+    return s
+end
+
+local function BuildSpellToKeyMap()
+    local map = {}
+    local function add(spellID, key)
+        if spellID and spellID > 0 and key and key ~= "" then
+            map[spellID] = FormatKeyForDisplay(key)
+        end
+    end
+    for barIdx, prefix in ipairs(KEYBIND_BAR_PREFIXES) do
+        local bindPrefix = KEYBIND_BINDING_NAMES[barIdx]
+        for i = 1, 12 do
+            local btn = _G[prefix .. i]
+            if btn and btn.action then
+                local slot = btn.action
+                local cmd = bindPrefix .. i
+                local key = GetBindingKey(cmd)
+                if key then
+                    local kind, id, subType = GetActionInfo(slot)
+                    if kind == "spell" and id then
+                        add(id, key)
+                        local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(id)
+                        if override then add(override, key) end
+                    elseif kind == "macro" and id then
+                        local macroSpell = GetMacroSpell and GetMacroSpell(id)
+                        if macroSpell then
+                            add(macroSpell, key)
+                            local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(macroSpell)
+                            if override then add(override, key) end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return map
+end
+
+local function GetSpellIDFromIcon(icon)
+    if icon.cooldownID and C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo then
+        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(icon.cooldownID)
+        if info and info.spellID then
+            return info.spellID
+        end
+    end
+    return nil
+end
+
+local function FindKeyForSpell(spellID, map)
+    if not spellID or not map then return "" end
+    if map[spellID] then return map[spellID] end
+    if C_Spell and C_Spell.GetOverrideSpell then
+        local ov = C_Spell.GetOverrideSpell(spellID)
+        if ov and map[ov] then return map[ov] end
+    end
+    if C_Spell and C_Spell.GetBaseSpell then
+        local base = C_Spell.GetBaseSpell(spellID)
+        if base and map[base] then return map[base] end
+    end
+    return ""
+end
+
+function Style:ApplyKeybind(button, cfg)
+    if not button or not cfg or not cfg.keybind then return end
+    local kb = cfg.keybind
+    if not kb.enabled then
+        if button._cdf_keybindFrame then
+            button._cdf_keybindFrame:Hide()
+        end
+        return
+    end
+
+    if not C_CooldownViewer or not C_CooldownViewer.GetCooldownViewerCooldownInfo then
+        return
+    end
+
+    if next(spellToKeyCache) == nil then
+        spellToKeyCache = BuildSpellToKeyMap()
+    end
+    local spellID = GetSpellIDFromIcon(button)
+    local keyText = FindKeyForSpell(spellID, spellToKeyCache)
+
+    if not button._cdf_keybindFrame then
+        local f = CreateFrame("Frame", nil, button)
+        f:SetAllPoints(button)
+        f:SetFrameLevel(button:GetFrameLevel() + 3)
+        local fs = f:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+        fs:SetTextColor(1, 1, 1, 1)
+        fs:SetShadowColor(0, 0, 0, 1)
+        fs:SetShadowOffset(1, -1)
+        f.text = fs
+        button._cdf_keybindFrame = f
+    end
+    local fs = button._cdf_keybindFrame.text
+    fs:SetText(keyText or "")
+
+    local flag = (kb.outline == "NONE") and "" or kb.outline
+    if fs._cdf_kbFontSize ~= kb.fontSize or fs._cdf_kbOutline ~= flag then
+        fs:SetFont(DEFAULT_FONT, kb.fontSize, flag)
+        fs._cdf_kbFontSize = kb.fontSize
+        fs._cdf_kbOutline = flag
+    end
+    local ox, oy = kb.offsetX or 0, kb.offsetY or 0
+    if fs._cdf_kbPoint ~= kb.point or fs._cdf_kbOx ~= ox or fs._cdf_kbOy ~= oy then
+        fs:ClearAllPoints()
+        fs:SetPoint(kb.point, button, kb.point, ox, oy)
+        fs._cdf_kbPoint = kb.point
+        fs._cdf_kbOx = ox
+        fs._cdf_kbOy = oy
+    end
+
+    if keyText and keyText ~= "" then
+        button._cdf_keybindFrame:Show()
+    else
+        button._cdf_keybindFrame:Hide()
+    end
+end
+
+function Style:InvalidateKeybindCache()
+    spellToKeyCache = {}
+end
+
+------------------------------------------------------
 -- 堆叠文字样式模块
 ------------------------------------------------------
 function Style:ApplyStack(button, cfg)

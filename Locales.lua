@@ -16,6 +16,7 @@ local S = {
     utility         = { "效能技能",     "Utility" },
     buffs           = { "增益效果",     "Buffs" },
     stackText       = { "堆叠文字",     "Stack Text" },
+    keybindText     = { "键位显示",     "Keybind" },
 
     -- 通用配置标题
     generalSettings = { "通用配置",     "General Settings" },
@@ -49,6 +50,7 @@ local S = {
     -- 锚点位置
     posTL           = { "左上",         "Top Left" },
     posTR           = { "右上",         "Top Right" },
+    posTop          = { "顶部",         "Top" },
     posBL           = { "左下",         "Bottom Left" },
     posBR           = { "右下",         "Bottom Right" },
     posCenter       = { "居中",         "Center" },

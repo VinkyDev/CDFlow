@@ -29,6 +29,7 @@ local OUTLINE_ITEMS = {
 local POS_ITEMS = {
     ["TOPLEFT"]     = L.posTL,
     ["TOPRIGHT"]    = L.posTR,
+    ["TOP"]         = L.posTop,
     ["BOTTOMLEFT"]  = L.posBL,
     ["BOTTOMRIGHT"] = L.posBR,
     ["CENTER"]      = L.posCenter,
@@ -284,6 +285,43 @@ local function BuildHighlightTab(scroll)
 end
 
 ------------------------------------------------------
+-- 「键位显示」区块（每个查看器独立配置）
+------------------------------------------------------
+local function BuildKeybindBlock(scroll, viewerKey)
+    local cfg = ns.db[viewerKey]
+    if not cfg or not cfg.keybind then return end
+    local kb = cfg.keybind
+
+    AddHeading(scroll, L.keybindText)
+
+    AddCheckbox(scroll, L.enable,
+        function() return kb.enabled end,
+        function(v) kb.enabled = v end)
+
+    AddSlider(scroll, L.fontSize, 6, 24, 1,
+        function() return kb.fontSize end,
+        function(v) kb.fontSize = v end)
+
+    AddDropdown(scroll, L.outline, OUTLINE_ITEMS,
+        { "NONE", "OUTLINE", "THICKOUTLINE" },
+        function() return kb.outline end,
+        function(v) kb.outline = v end)
+
+    AddDropdown(scroll, L.position, POS_ITEMS,
+        { "TOPLEFT", "TOPRIGHT", "TOP", "BOTTOMLEFT", "BOTTOMRIGHT", "CENTER" },
+        function() return kb.point end,
+        function(v) kb.point = v end)
+
+    AddSlider(scroll, L.offsetX, -20, 20, 1,
+        function() return kb.offsetX end,
+        function(v) kb.offsetX = v end)
+
+    AddSlider(scroll, L.offsetY, -20, 20, 1,
+        function() return kb.offsetY end,
+        function(v) kb.offsetY = v end)
+end
+
+------------------------------------------------------
 -- 「堆叠文字」区块（每个查看器独立配置）
 ------------------------------------------------------
 local function BuildStackBlock(scroll, viewerKey)
@@ -459,11 +497,9 @@ local function BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRo
         function() return cfg.spacingY end,
         function(v) cfg.spacingY = v end)
 
-    -- 堆叠文字（每个查看器独立配置）
-    BuildStackBlock(scroll, viewerKey)
-
-    -- 行尺寸覆盖
     BuildRowOverrides(scroll, viewerKey)
+    BuildStackBlock(scroll, viewerKey)
+    BuildKeybindBlock(scroll, viewerKey)
 end
 
 ------------------------------------------------------
@@ -588,8 +624,8 @@ function ns:InitSettings()
         title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 14, -4)
         title:SetText("|cff00ccffCDFlow|r")
 
-        -- 版本号（兼容新旧 API，从 TOC 读取）
-        local version = "1.1.0"
+        -- 版本号
+        local version = "1.1.1"
         if C_AddOns and C_AddOns.GetAddOnMetadata then
             version = C_AddOns.GetAddOnMetadata("CDFlow", "Version") or version
         elseif GetAddOnMetadata then

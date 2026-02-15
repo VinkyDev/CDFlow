@@ -12,24 +12,31 @@ ns.defaults = {
     -- 核心技能查看器
     essential = {
         enabled     = true,
-        growDir     = "CENTER",     -- CENTER = 居中 / DEFAULT = 游戏默认
+        growDir     = "CENTER",
         iconsPerRow = 8,
         iconWidth   = 52,
         iconHeight  = 52,
         spacingX    = 2,
         spacingY    = 2,
-        rowOverrides = {},          -- [行号] = {width, height}
+        rowOverrides = {},
         stack = {
             enabled  = false,
             fontSize = 12,
-            outline  = "OUTLINE",   -- NONE / OUTLINE / THICKOUTLINE
+            outline  = "OUTLINE",
             point    = "BOTTOMRIGHT",
             offsetX  = 0,
             offsetY  = 0,
         },
+        keybind = {
+            enabled  = false,
+            fontSize = 10,
+            outline  = "OUTLINE",
+            point    = "TOPRIGHT",
+            offsetX  = 0,
+            offsetY  = -2,
+        },
     },
 
-    -- 工具技能查看器
     utility = {
         enabled     = true,
         growDir     = "CENTER",
@@ -47,13 +54,20 @@ ns.defaults = {
             offsetX  = 0,
             offsetY  = 0,
         },
+        keybind = {
+            enabled  = false,
+            fontSize = 10,
+            outline  = "OUTLINE",
+            point    = "TOPRIGHT",
+            offsetX  = 0,
+            offsetY  = -2,
+        },
     },
 
-    -- 增益图标查看器
     buffs = {
         enabled     = true,
         growDir     = "CENTER",
-        iconsPerRow = 0,            -- 0 = 不限制，单行显示
+        iconsPerRow = 0,
         iconWidth   = 40,
         iconHeight  = 40,
         spacingX    = 2,
@@ -66,6 +80,14 @@ ns.defaults = {
             point    = "BOTTOMRIGHT",
             offsetX  = 0,
             offsetY  = 0,
+        },
+        keybind = {
+            enabled  = false,
+            fontSize = 10,
+            outline  = "OUTLINE",
+            point    = "TOPRIGHT",
+            offsetX  = 0,
+            offsetY  = -2,
         },
     },
 
@@ -115,7 +137,14 @@ function ns:LoadConfig()
         CDFlowDB = DeepCopy(self.defaults)
     else
         DeepMerge(CDFlowDB, self.defaults)
-        -- 迁移：旧版全局 stack 转为各查看器独立配置
+        for _, key in ipairs({ "essential", "utility", "buffs" }) do
+            if CDFlowDB[key] then
+                if CDFlowDB[key].showKeybind == true and CDFlowDB[key].keybind then
+                    CDFlowDB[key].keybind.enabled = true
+                end
+                CDFlowDB[key].showKeybind = nil
+            end
+        end
         if CDFlowDB.stack and type(CDFlowDB.stack) == "table" then
             local old = CDFlowDB.stack
             for _, key in ipairs({ "essential", "utility", "buffs" }) do

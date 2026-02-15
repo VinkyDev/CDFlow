@@ -164,6 +164,7 @@ function Layout:RefreshBuffViewer(viewer, cfg)
     for _, icon in ipairs(visible) do
         Style:ApplyIcon(icon, w, h, db.iconZoom, db.borderSize)
         Style:ApplyStack(icon, cfg.stack)
+        Style:ApplyKeybind(icon, cfg)
     end
 
     -- 定位
@@ -310,6 +311,7 @@ function Layout:RefreshCDViewer(viewer, cfg)
         for _, icon in ipairs(row) do
             Style:ApplyIcon(icon, info.w, info.h, db.iconZoom, db.borderSize)
             Style:ApplyStack(icon, cfg.stack)
+            Style:ApplyKeybind(icon, cfg)
         end
     end
 

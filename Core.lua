@@ -154,6 +154,27 @@ eventHandlers["TRAIT_CONFIG_UPDATED"] = function()
     RequestRefreshAll(0)
 end
 
+eventHandlers["UPDATE_BINDINGS"] = function()
+    if Style.InvalidateKeybindCache then
+        Style:InvalidateKeybindCache()
+    end
+    RequestRefreshAll(0)
+end
+
+eventHandlers["UPDATE_BONUS_ACTIONBAR"] = function()
+    if Style.InvalidateKeybindCache then
+        Style:InvalidateKeybindCache()
+    end
+    RequestRefreshAll(0)
+end
+
+eventHandlers["ACTIONBAR_HIDEGRID"] = function()
+    if Style.InvalidateKeybindCache then
+        Style:InvalidateKeybindCache()
+    end
+    RequestRefreshAll(0)
+end
+
 -- 注册所有事件
 for event in pairs(eventHandlers) do
     eventFrame:RegisterEvent(event)
