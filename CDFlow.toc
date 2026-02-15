@@ -4,7 +4,7 @@
 ## Notes-zhCN: 轻量级冷却管理器美化
 ## Notes-zhTW: 輕量級冷卻管理器美化
 ## Author: Vinky
-## Version: 1.1.1
+## Version: 1.2.0
 ## SavedVariables: CDFlowDB
 ## IconTexture: Interface\AddOns\CDFlow\Media\logo
 ## Category: Combat

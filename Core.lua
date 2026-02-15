@@ -67,6 +67,13 @@ local function RegisterHooks()
             Layout:RefreshViewer("BuffIconCooldownViewer")
         end)
     end
+
+    -- 追踪状态栏
+    if BuffBarCooldownViewer then
+        hooksecurefunc(BuffBarCooldownViewer, "RefreshLayout", function()
+            Layout:RefreshTrackedBars()
+        end)
+    end
 end
 
 ------------------------------------------------------

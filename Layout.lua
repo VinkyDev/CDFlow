@@ -23,6 +23,8 @@ local VIEWER_KEY = {
     BuffIconCooldownViewer  = "buffs",
 }
 
+local restoringViewer = {}
+
 ------------------------------------------------------
 -- 工具函数
 ------------------------------------------------------
@@ -90,20 +92,56 @@ local function SetPointCached(icon, anchor, viewer, x, y)
     icon:SetPoint(anchor, viewer, anchor, x, y)
 end
 
+local function CollectTrackedBars(viewer)
+    if not viewer then return {} end
+    local frames = {}
+
+    if viewer.GetItemFrames then
+        local ok, items = pcall(viewer.GetItemFrames, viewer)
+        if ok and type(items) == "table" then
+            frames = items
+        end
+    end
+
+    if #frames == 0 then
+        local children = { viewer:GetChildren() }
+        for _, child in ipairs(children) do
+            if child and child:IsObjectType("Frame") then
+                frames[#frames + 1] = child
+            end
+        end
+    end
+
+    local active = {}
+    for _, frame in ipairs(frames) do
+        if frame:IsShown() and frame:IsVisible() then
+            active[#active + 1] = frame
+        end
+    end
+
+    table.sort(active, function(a, b)
+        return (a.layoutIndex or 0) < (b.layoutIndex or 0)
+    end)
+    return active
+end
+
 ------------------------------------------------------
 -- 入口：根据查看器类型分发
 ------------------------------------------------------
 function Layout:RefreshViewer(viewerName)
+    if restoringViewer[viewerName] then return end
     local viewer = _G[viewerName]
     if not viewer or not IsReady(viewer) then return end
 
     local cfgKey = VIEWER_KEY[viewerName]
     if not cfgKey then return end
     local cfg = ns.db[cfgKey]
-    if not cfg or not cfg.enabled then return end
+    if not cfg then return end
+    viewer._cdf_disabledApplied = nil
 
     if viewerName == "BuffIconCooldownViewer" then
         self:RefreshBuffViewer(viewer, cfg)
+        self:RefreshTrackedBars()
     else
         self:RefreshCDViewer(viewer, cfg)
     end
@@ -165,6 +203,7 @@ function Layout:RefreshBuffViewer(viewer, cfg)
         Style:ApplyIcon(icon, w, h, db.iconZoom, db.borderSize)
         Style:ApplyStack(icon, cfg.stack)
         Style:ApplyKeybind(icon, cfg)
+        Style:ApplyCooldownText(icon, cfg)
     end
 
     -- 定位
@@ -312,6 +351,7 @@ function Layout:RefreshCDViewer(viewer, cfg)
             Style:ApplyIcon(icon, info.w, info.h, db.iconZoom, db.borderSize)
             Style:ApplyStack(icon, cfg.stack)
             Style:ApplyKeybind(icon, cfg)
+            Style:ApplyCooldownText(icon, cfg)
         end
     end
 
@@ -391,4 +431,33 @@ function Layout:RefreshAll()
     self:RefreshViewer("EssentialCooldownViewer")
     self:RefreshViewer("UtilityCooldownViewer")
     self:RefreshViewer("BuffIconCooldownViewer")
+end
+
+------------------------------------------------------
+-- 追踪状态栏（Tracked Bars）布局
+------------------------------------------------------
+function Layout:RefreshTrackedBars()
+    local viewer = _G.BuffBarCooldownViewer
+    if not viewer then return end
+    if EditModeManagerFrame and EditModeManagerFrame.layoutApplyInProgress then return end
+    if viewer.IsInitialized and not viewer:IsInitialized() then return end
+
+    local bars = CollectTrackedBars(viewer)
+    if #bars == 0 then return end
+
+    local barHeight = bars[1] and bars[1]:GetHeight()
+    if not barHeight or barHeight <= 0 then return end
+
+    local spacing = viewer.childYPadding or 0
+    local growFromBottom = (ns.db.trackedBarsGrowDir ~= "TOP")
+
+    for index, bar in ipairs(bars) do
+        local offset = index - 1
+        local y = growFromBottom and (offset * (barHeight + spacing)) or (-offset * (barHeight + spacing))
+        if growFromBottom then
+            SetPointCached(bar, "BOTTOM", viewer, 0, y)
+        else
+            SetPointCached(bar, "TOP", viewer, 0, y)
+        end
+    end
 end

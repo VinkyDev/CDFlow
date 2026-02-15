@@ -8,6 +8,7 @@ ns.defaults = {
     -- 全局样式
     iconZoom    = 0.08,     -- 图标纹理裁剪量
     borderSize  = 1,        -- 边框像素粗细
+    trackedBarsGrowDir = "BOTTOM", -- 追踪状态栏增长方向：BOTTOM/TOP
 
     -- 核心技能查看器
     essential = {
@@ -22,7 +23,9 @@ ns.defaults = {
         stack = {
             enabled  = false,
             fontSize = 12,
+            fontName = "默认",
             outline  = "OUTLINE",
+            textColor = { 1, 1, 1, 1 },
             point    = "BOTTOMRIGHT",
             offsetX  = 0,
             offsetY  = 0,
@@ -30,10 +33,23 @@ ns.defaults = {
         keybind = {
             enabled  = false,
             fontSize = 10,
+            fontName = "默认",
             outline  = "OUTLINE",
+            textColor = { 1, 1, 1, 1 },
             point    = "TOPRIGHT",
             offsetX  = 0,
             offsetY  = -2,
+            manualBySpell = {},
+        },
+        cooldownText = {
+            enabled  = false,
+            fontSize = 18,
+            fontName = "默认",
+            outline  = "OUTLINE",
+            textColor = { 1, 0.82, 0, 1 },
+            point    = "CENTER",
+            offsetX  = 0,
+            offsetY  = 0,
         },
     },
 
@@ -49,7 +65,9 @@ ns.defaults = {
         stack = {
             enabled  = false,
             fontSize = 12,
+            fontName = "默认",
             outline  = "OUTLINE",
+            textColor = { 1, 1, 1, 1 },
             point    = "BOTTOMRIGHT",
             offsetX  = 0,
             offsetY  = 0,
@@ -57,10 +75,23 @@ ns.defaults = {
         keybind = {
             enabled  = false,
             fontSize = 10,
+            fontName = "默认",
             outline  = "OUTLINE",
+            textColor = { 1, 1, 1, 1 },
             point    = "TOPRIGHT",
             offsetX  = 0,
             offsetY  = -2,
+            manualBySpell = {},
+        },
+        cooldownText = {
+            enabled  = false,
+            fontSize = 14,
+            fontName = "默认",
+            outline  = "OUTLINE",
+            textColor = { 1, 0.82, 0, 1 },
+            point    = "CENTER",
+            offsetX  = 0,
+            offsetY  = 0,
         },
     },
 
@@ -76,7 +107,9 @@ ns.defaults = {
         stack = {
             enabled  = false,
             fontSize = 12,
+            fontName = "默认",
             outline  = "OUTLINE",
+            textColor = { 1, 1, 1, 1 },
             point    = "BOTTOMRIGHT",
             offsetX  = 0,
             offsetY  = 0,
@@ -84,10 +117,23 @@ ns.defaults = {
         keybind = {
             enabled  = false,
             fontSize = 10,
+            fontName = "默认",
             outline  = "OUTLINE",
+            textColor = { 1, 1, 1, 1 },
             point    = "TOPRIGHT",
             offsetX  = 0,
             offsetY  = -2,
+            manualBySpell = {},
+        },
+        cooldownText = {
+            enabled  = false,
+            fontSize = 16,
+            fontName = "默认",
+            outline  = "OUTLINE",
+            textColor = { 1, 0.82, 0, 1 },
+            point    = "CENTER",
+            offsetX  = 0,
+            offsetY  = 0,
         },
     },
 
@@ -119,6 +165,7 @@ local function DeepCopy(src)
     for k, v in pairs(src) do t[k] = DeepCopy(v) end
     return t
 end
+ns.DeepCopy = DeepCopy
 
 -- 用默认值填充缺失字段（不覆盖已有值）
 local function DeepMerge(dst, defaults)
@@ -137,10 +184,43 @@ function ns:LoadConfig()
         CDFlowDB = DeepCopy(self.defaults)
     else
         DeepMerge(CDFlowDB, self.defaults)
+        if CDFlowDB.trackedBarsGrowDir ~= "TOP" and CDFlowDB.trackedBarsGrowDir ~= "BOTTOM" then
+            CDFlowDB.trackedBarsGrowDir = self.defaults.trackedBarsGrowDir
+        end
         for _, key in ipairs({ "essential", "utility", "buffs" }) do
             if CDFlowDB[key] then
+                CDFlowDB[key].enabled = true
                 if CDFlowDB[key].showKeybind == true and CDFlowDB[key].keybind then
                     CDFlowDB[key].keybind.enabled = true
+                end
+                if CDFlowDB[key].stack then
+                    if type(CDFlowDB[key].stack.fontName) ~= "string" then
+                        CDFlowDB[key].stack.fontName = "默认"
+                    end
+                    if type(CDFlowDB[key].stack.textColor) ~= "table" then
+                        CDFlowDB[key].stack.textColor = { 1, 1, 1, 1 }
+                    end
+                end
+                if CDFlowDB[key].keybind then
+                    CDFlowDB[key].keybind.fontPath = nil
+                    if type(CDFlowDB[key].keybind.fontName) ~= "string" then
+                        CDFlowDB[key].keybind.fontName = "默认"
+                    end
+                    if type(CDFlowDB[key].keybind.manualBySpell) ~= "table" then
+                        CDFlowDB[key].keybind.manualBySpell = {}
+                    end
+                    if type(CDFlowDB[key].keybind.textColor) ~= "table" then
+                        CDFlowDB[key].keybind.textColor = { 1, 1, 1, 1 }
+                    end
+                end
+                if CDFlowDB[key].cooldownText then
+                    CDFlowDB[key].cooldownText.fontPath = nil
+                    if type(CDFlowDB[key].cooldownText.fontName) ~= "string" then
+                        CDFlowDB[key].cooldownText.fontName = "默认"
+                    end
+                    if type(CDFlowDB[key].cooldownText.textColor) ~= "table" then
+                        CDFlowDB[key].cooldownText.textColor = { 1, 0.82, 0, 1 }
+                    end
                 end
                 CDFlowDB[key].showKeybind = nil
             end

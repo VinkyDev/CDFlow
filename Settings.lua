@@ -8,6 +8,7 @@ local L = ns.L
 local Layout = ns.Layout
 local Style  = ns.Style
 local AceGUI
+local LSM = LibStub("LibSharedMedia-3.0", true)
 
 -- 设置面板引用（用于 toggle）
 local settingsFrame = nil
@@ -20,11 +21,46 @@ local DIR_ITEMS = {
     ["DEFAULT"] = L.dirDefault,
 }
 
+local TRACKED_BARS_DIR_ITEMS = {
+    ["TOP"]    = L.dirTop,
+    ["BOTTOM"] = L.dirBottom,
+}
+
 local OUTLINE_ITEMS = {
     ["NONE"]         = L.outNone,
     ["OUTLINE"]      = L.outOutline,
     ["THICKOUTLINE"] = L.outThick,
 }
+
+local function GetLSMDefaultFont()
+    if LSM and LSM.DefaultMedia and LSM.DefaultMedia.font then
+        return LSM.DefaultMedia.font
+    end
+    return ""
+end
+
+local function GetFontList()
+    if LSM and LSM.List then
+        return LSM:List("font")
+    end
+    return {}
+end
+
+local function GetFontItems()
+    local items = {}
+    local order = {}
+    local list = GetFontList()
+    for _, name in ipairs(list) do
+        items[name] = name
+        order[#order + 1] = name
+    end
+    return items, order
+end
+
+local function GetEffectiveFontName(fontName)
+    if fontName and fontName ~= "" then return fontName end
+    return GetLSMDefaultFont()
+end
 
 local POS_ITEMS = {
     ["TOPLEFT"]     = L.posTL,
@@ -109,6 +145,47 @@ local function AddGlowSlider(parent, label, minVal, maxVal, step, value, onChang
     return w
 end
 
+local function AddEditBox(parent, label, getValue, setValue)
+    local w = AceGUI:Create("EditBox")
+    w:SetLabel(label)
+    w:SetText(getValue() or "")
+    w:SetFullWidth(true)
+    w:SetCallback("OnEnterPressed", function(_, _, val)
+        setValue(val)
+        Layout:RefreshAll()
+    end)
+    parent:AddChild(w)
+    return w
+end
+
+local function AddButton(parent, text, onClick)
+    local w = AceGUI:Create("Button")
+    w:SetText(text)
+    w:SetFullWidth(true)
+    w:SetCallback("OnClick", function()
+        onClick()
+        Layout:RefreshAll()
+    end)
+    parent:AddChild(w)
+    return w
+end
+
+local function AddColorPicker(parent, label, getValue, setValue)
+    local w = AceGUI:Create("ColorPicker")
+    w:SetLabel(label)
+    w:SetHasAlpha(true)
+    local c = getValue()
+    w:SetColor(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
+    local function OnColor(_, _, r, g, b, a)
+        setValue(r, g, b, a)
+        Layout:RefreshAll()
+    end
+    w:SetCallback("OnValueChanged", OnColor)
+    w:SetCallback("OnValueConfirmed", OnColor)
+    parent:AddChild(w)
+    return w
+end
+
 ------------------------------------------------------
 -- 构建「概览」选项卡
 ------------------------------------------------------
@@ -137,6 +214,83 @@ local function BuildGeneralTab(scroll)
     AddSlider(scroll, L.borderSize, 0, 4, 1,
         function() return ns.db.borderSize end,
         function(v) ns.db.borderSize = v end)
+
+    -- 快捷操作
+    AddHeading(scroll, "")
+
+    local editModeBtn = AceGUI:Create("Button")
+    editModeBtn:SetText(L.openEditMode)
+    editModeBtn:SetFullWidth(true)
+    editModeBtn:SetCallback("OnClick", function()
+        if InCombatLockdown() then return end
+        local frame = _G.EditModeManagerFrame
+        if not frame then
+            local loader = (C_AddOns and C_AddOns.LoadAddOn) or LoadAddOn
+            if loader and loader("Blizzard_EditMode") then
+                frame = _G.EditModeManagerFrame
+            end
+        end
+        if frame then
+            if frame.CanEnterEditMode and not frame:CanEnterEditMode() then return end
+            if frame:IsShown() then
+                HideUIPanel(frame)
+            else
+                ShowUIPanel(frame)
+            end
+        end
+    end)
+    scroll:AddChild(editModeBtn)
+
+    local cdmBtn = AceGUI:Create("Button")
+    cdmBtn:SetText(L.openCDMSettings)
+    cdmBtn:SetFullWidth(true)
+    cdmBtn:SetCallback("OnClick", function()
+        if InCombatLockdown() then return end
+        if settingsFrame then
+            settingsFrame:Release()
+            settingsFrame = nil
+        end
+        if SettingsPanel and SettingsPanel:IsShown() then
+            HideUIPanel(SettingsPanel)
+        end
+        C_Timer.After(0.1, function()
+            if CooldownViewerSettings and CooldownViewerSettings.ShowUIPanel then
+                CooldownViewerSettings:ShowUIPanel(false)
+            end
+        end)
+    end)
+    scroll:AddChild(cdmBtn)
+
+    -- 重置为默认配置
+    AddHeading(scroll, "")
+
+    local resetBtn = AceGUI:Create("Button")
+    resetBtn:SetText(L.resetDefaults)
+    resetBtn:SetFullWidth(true)
+    local pendingConfirm = false
+    resetBtn:SetCallback("OnClick", function()
+        if not pendingConfirm then
+            pendingConfirm = true
+            resetBtn:SetText("|cffff4444" .. L.resetConfirm .. "|r")
+            C_Timer.After(5, function()
+                if pendingConfirm then
+                    pendingConfirm = false
+                    resetBtn:SetText(L.resetDefaults)
+                end
+            end)
+        else
+            pendingConfirm = false
+            CDFlowDB = ns.DeepCopy(ns.defaults)
+            ns.db = CDFlowDB
+            Layout:RefreshAll()
+            resetBtn:SetText(L.resetDefaults)
+            if settingsFrame then
+                settingsFrame:Release()
+                settingsFrame = nil
+            end
+        end
+    end)
+    scroll:AddChild(resetBtn)
 end
 
 ------------------------------------------------------
@@ -285,77 +439,94 @@ local function BuildHighlightTab(scroll)
 end
 
 ------------------------------------------------------
--- 「键位显示」区块（每个查看器独立配置）
+-- 通用文字叠层区块构建器
 ------------------------------------------------------
-local function BuildKeybindBlock(scroll, viewerKey)
-    local cfg = ns.db[viewerKey]
-    if not cfg or not cfg.keybind then return end
-    local kb = cfg.keybind
+local function BuildTextOverlaySection(scroll, title, cfg, options)
+    options = options or {}
+    local maxOffset = options.maxOffset or 20
+    local maxSize = options.maxSize or 48
+    local enableLabel = options.enableLabel or L.enable
 
-    AddHeading(scroll, L.keybindText)
+    AddHeading(scroll, title)
 
-    AddCheckbox(scroll, L.enable,
-        function() return kb.enabled end,
-        function(v) kb.enabled = v end)
+    local container = AceGUI:Create("SimpleGroup")
+    container:SetFullWidth(true)
+    container:SetLayout("List")
+    scroll:AddChild(container)
 
-    AddSlider(scroll, L.fontSize, 6, 24, 1,
-        function() return kb.fontSize end,
-        function(v) kb.fontSize = v end)
+    local function RefreshScrollLayout()
+        C_Timer.After(0, function()
+            if scroll and scroll.DoLayout then scroll:DoLayout() end
+        end)
+    end
 
-    AddDropdown(scroll, L.outline, OUTLINE_ITEMS,
-        { "NONE", "OUTLINE", "THICKOUTLINE" },
-        function() return kb.outline end,
-        function(v) kb.outline = v end)
+    local function RebuildContent()
+        container:ReleaseChildren()
 
-    AddDropdown(scroll, L.position, POS_ITEMS,
-        { "TOPLEFT", "TOPRIGHT", "TOP", "BOTTOMLEFT", "BOTTOMRIGHT", "CENTER" },
-        function() return kb.point end,
-        function(v) kb.point = v end)
+        local cb = AceGUI:Create("CheckBox")
+        cb:SetLabel(enableLabel)
+        cb:SetValue(cfg.enabled)
+        cb:SetFullWidth(true)
+        cb:SetCallback("OnValueChanged", function(_, _, val)
+            cfg.enabled = val
+            Layout:RefreshAll()
+            RebuildContent()
+        end)
+        container:AddChild(cb)
 
-    AddSlider(scroll, L.offsetX, -20, 20, 1,
-        function() return kb.offsetX end,
-        function(v) kb.offsetX = v end)
+        if not cfg.enabled then
+            RefreshScrollLayout()
+            return
+        end
 
-    AddSlider(scroll, L.offsetY, -20, 20, 1,
-        function() return kb.offsetY end,
-        function(v) kb.offsetY = v end)
-end
+        -- 字号
+        AddSlider(container, L.fontSize, 6, maxSize, 1,
+            function() return cfg.fontSize end,
+            function(v) cfg.fontSize = v end)
 
-------------------------------------------------------
--- 「堆叠文字」区块（每个查看器独立配置）
-------------------------------------------------------
-local function BuildStackBlock(scroll, viewerKey)
-    local cfg = ns.db[viewerKey]
-    if not cfg or not cfg.stack then return end
-    local stack = cfg.stack
+        -- 字体
+        local fontItems, fontOrder = GetFontItems()
+        AddDropdown(container, L.fontFamily, fontItems, fontOrder,
+            function() return GetEffectiveFontName(cfg.fontName) end,
+            function(v) cfg.fontName = v end)
 
-    AddHeading(scroll, L.stackText)
+        -- 描边
+        AddDropdown(container, L.outline, OUTLINE_ITEMS,
+            { "NONE", "OUTLINE", "THICKOUTLINE" },
+            function() return cfg.outline end,
+            function(v) cfg.outline = v end)
 
-    AddCheckbox(scroll, L.enable,
-        function() return stack.enabled end,
-        function(v) stack.enabled = v end)
+        -- 颜色
+        if type(cfg.textColor) == "table" then
+            AddColorPicker(container, L.textColor,
+                function() return cfg.textColor end,
+                function(r, g, b, a) cfg.textColor = { r, g, b, a } end)
+        end
 
-    AddSlider(scroll, L.fontSize, 6, 24, 1,
-        function() return stack.fontSize end,
-        function(v) stack.fontSize = v end)
+        -- 位置
+        AddDropdown(container, L.position, POS_ITEMS,
+            { "TOPLEFT", "TOPRIGHT", "TOP", "BOTTOMLEFT", "BOTTOMRIGHT", "CENTER" },
+            function() return cfg.point end,
+            function(v) cfg.point = v end)
 
-    AddDropdown(scroll, L.outline, OUTLINE_ITEMS,
-        { "NONE", "OUTLINE", "THICKOUTLINE" },
-        function() return stack.outline end,
-        function(v) stack.outline = v end)
+        -- 偏移
+        AddSlider(container, L.offsetX, -maxOffset, maxOffset, 1,
+            function() return cfg.offsetX end,
+            function(v) cfg.offsetX = v end)
 
-    AddDropdown(scroll, L.position, POS_ITEMS,
-        { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", "CENTER" },
-        function() return stack.point end,
-        function(v) stack.point = v end)
+        AddSlider(container, L.offsetY, -maxOffset, maxOffset, 1,
+            function() return cfg.offsetY end,
+            function(v) cfg.offsetY = v end)
 
-    AddSlider(scroll, L.offsetX, -20, 20, 1,
-        function() return stack.offsetX end,
-        function(v) stack.offsetX = v end)
+        -- 额外内容
+        if options.buildExtra then
+            options.buildExtra(container)
+        end
 
-    AddSlider(scroll, L.offsetY, -20, 20, 1,
-        function() return stack.offsetY end,
-        function(v) stack.offsetY = v end)
+        RefreshScrollLayout()
+    end
+
+    RebuildContent()
 end
 
 ------------------------------------------------------
@@ -457,14 +628,17 @@ end
 local function BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRow)
     local cfg = ns.db[viewerKey]
 
-    AddCheckbox(scroll, L.enable,
-        function() return cfg.enabled end,
-        function(v) cfg.enabled = v end)
-
     AddDropdown(scroll, L.growDir, DIR_ITEMS,
         { "CENTER", "DEFAULT" },
         function() return cfg.growDir end,
         function(v) cfg.growDir = v end)
+
+    if viewerKey == "buffs" then
+        AddDropdown(scroll, L.trackedBarsGrowDir, TRACKED_BARS_DIR_ITEMS,
+            { "TOP", "BOTTOM" },
+            function() return ns.db.trackedBarsGrowDir end,
+            function(v) ns.db.trackedBarsGrowDir = v end)
+    end
 
     if showPerRow then
         local minPerRow = allowUnlimitedPerRow and 0 or 1
@@ -498,8 +672,106 @@ local function BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRo
         function(v) cfg.spacingY = v end)
 
     BuildRowOverrides(scroll, viewerKey)
-    BuildStackBlock(scroll, viewerKey)
-    BuildKeybindBlock(scroll, viewerKey)
+
+    -- 堆叠文字
+    if cfg.stack then
+        BuildTextOverlaySection(scroll, L.stackText, cfg.stack, {
+            enableLabel = L.customizeStyle,
+            maxSize = 48,
+        })
+    end
+
+    -- 键位显示
+    if cfg.keybind then
+        BuildTextOverlaySection(scroll, L.keybindText, cfg.keybind, {
+            enableLabel = L.enableDisplay,
+            maxSize = 48,
+            buildExtra = function(parent)
+                local kb = cfg.keybind
+
+                local subGroup = AceGUI:Create("InlineGroup")
+                subGroup:SetTitle(L.manualOverride)
+                subGroup:SetFullWidth(true)
+                subGroup:SetLayout("Flow")
+                parent:AddChild(subGroup)
+
+                local hint = AceGUI:Create("Label")
+                hint:SetText("|cffaaaaaa" .. L.manualListHint .. "|r")
+                hint:SetFullWidth(true)
+                hint:SetFontObject(GameFontHighlightSmall)
+                subGroup:AddChild(hint)
+
+                if type(kb.manualBySpell) ~= "table" then
+                    kb.manualBySpell = {}
+                end
+
+                local manualSpellID, manualText
+
+                AddEditBox(subGroup, L.spellID,
+                    function() return manualSpellID and tostring(manualSpellID) or "" end,
+                    function(v) manualSpellID = tonumber(v) end)
+
+                AddEditBox(subGroup, L.displayText,
+                    function() return manualText or "" end,
+                    function(v) manualText = v end)
+
+                local listLabel = AceGUI:Create("Label")
+                listLabel:SetFullWidth(true)
+                listLabel:SetFontObject(GameFontHighlightSmall)
+                subGroup:AddChild(listLabel)
+
+                local function RebuildManualList()
+                    local keys = {}
+                    for id in pairs(kb.manualBySpell) do
+                        keys[#keys + 1] = tonumber(id) or id
+                    end
+                    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+                    local lines = { "|cff88ccff" .. L.manualListTitle .. "|r" }
+                    for _, id in ipairs(keys) do
+                        local text = kb.manualBySpell[id] or kb.manualBySpell[tostring(id)]
+                        lines[#lines + 1] = tostring(id) .. " = " .. tostring(text)
+                    end
+                    if #keys == 0 then
+                        lines[#lines + 1] = "|cff888888-|r"
+                    end
+                    listLabel:SetText(table.concat(lines, "\n"))
+                end
+
+                AddButton(subGroup, L.addOrUpdate, function()
+                    if manualSpellID and manualSpellID > 0 and manualText and manualText ~= "" then
+                        kb.manualBySpell[manualSpellID] = manualText
+                        RebuildManualList()
+                    end
+                end)
+
+                AddButton(subGroup, L.remove, function()
+                    if manualSpellID and manualSpellID > 0 then
+                        kb.manualBySpell[manualSpellID] = nil
+                        kb.manualBySpell[tostring(manualSpellID)] = nil
+                        RebuildManualList()
+                    end
+                end)
+
+                RebuildManualList()
+            end,
+        })
+    end
+
+    -- 冷却读秒
+    if cfg.cooldownText then
+        BuildTextOverlaySection(scroll, L.cooldownText, cfg.cooldownText, {
+            enableLabel = L.customizeStyle,
+            maxSize = 48,
+            maxOffset = 30,
+        })
+    end
+
+    -- 底部提示
+    local tip = AceGUI:Create("Label")
+    tip:SetText("|cffaaaaaa" .. L.needReloadHint .. "|r")
+    tip:SetFullWidth(true)
+    tip:SetFontObject(GameFontHighlightSmall)
+    scroll:AddChild(tip)
 end
 
 ------------------------------------------------------
@@ -625,7 +897,7 @@ function ns:InitSettings()
         title:SetText("|cff00ccffCDFlow|r")
 
         -- 版本号
-        local version = "1.1.1"
+        local version = "1.2.0"
         if C_AddOns and C_AddOns.GetAddOnMetadata then
             version = C_AddOns.GetAddOnMetadata("CDFlow", "Version") or version
         elseif GetAddOnMetadata then

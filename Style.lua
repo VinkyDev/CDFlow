@@ -11,8 +11,23 @@ local SQUARE_MASK = "Interface\\BUTTONS\\WHITE8X8"
 local DEFAULT_FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 local ROUND_MASK_TEX = 6707800
 local GLOW_COLOR = { 0.95, 0.95, 0.32, 1 }
+local LSM = LibStub("LibSharedMedia-3.0", true)
 
 local _issecretvalue = issecretvalue or function() return false end
+
+local function ResolveFontPath(fontName)
+    if LSM then
+        local name = fontName
+        if not name or name == "" then
+            name = LSM.DefaultMedia and LSM.DefaultMedia.font
+        end
+        if name and name ~= "" then
+            local ok, p = pcall(LSM.Fetch, LSM, "font", name, true)
+            if ok and p then return p end
+        end
+    end
+    return DEFAULT_FONT
+end
 
 local function EnsureIconCaches(button)
     if button._cdf_cacheReady then return end
@@ -325,29 +340,59 @@ local KEYBIND_BINDING_NAMES = {
     "MULTIACTIONBAR3BUTTON",
 }
 
+local function FormatCompact(raw)
+    local s = raw:upper()
+    s = s:gsub("STRG%-", "CTRL-")
+    s = s:gsub("CONTROL%-", "CTRL-")
+    s = s:gsub("%s+", "")
+
+    local mods = ""
+    if s:find("CTRL-", 1, true) then mods = mods .. "C" end
+    if s:find("ALT-", 1, true) then mods = mods .. "A" end
+    if s:find("SHIFT-", 1, true) then mods = mods .. "S" end
+    if s:find("META-", 1, true) then mods = mods .. "M" end
+
+    s = s:gsub("CTRL%-", "")
+    s = s:gsub("ALT%-", "")
+    s = s:gsub("SHIFT%-", "")
+    s = s:gsub("META%-", "")
+
+    s = s:gsub("MOUSEWHEELUP", "MU")
+    s = s:gsub("MOUSEWHEELDOWN", "MD")
+    s = s:gsub("MOUSEBUTTON(%d+)", "M%1")
+    s = s:gsub("BUTTON(%d+)", "M%1")
+    s = s:gsub("NUMPAD(%d+)", "N%1")
+    s = s:gsub("NUMPADPLUS", "N+")
+    s = s:gsub("NUMPADMINUS", "N-")
+    s = s:gsub("NUMPADMULTIPLY", "N*")
+    s = s:gsub("NUMPADDIVIDE", "N/")
+    s = s:gsub("HOME", "HM")
+    s = s:gsub("END", "ED")
+    s = s:gsub("INSERT", "INS")
+    s = s:gsub("DELETE", "DEL")
+    s = s:gsub("PAGEUP", "PU")
+    s = s:gsub("PAGEDOWN", "PD")
+    s = s:gsub("SPACEBAR", "SP")
+    s = s:gsub("BACKSPACE", "BS")
+    s = s:gsub("CAPSLOCK", "CL")
+    s = s:gsub("ESCAPE", "ESC")
+    s = s:gsub("RETURN", "RT")
+    s = s:gsub("ENTER", "RT")
+    s = s:gsub("TAB", "TB")
+    s = s:gsub("%+", "")
+    return mods .. s
+end
+
 local function FormatKeyForDisplay(raw)
     if not raw or raw == "" or raw == "●" then return "" end
-    local s = raw:upper()
-    s = s:gsub("SHIFT%-", "S-")
-    s = s:gsub("CTRL%-", "C-")
-    s = s:gsub("ALT%-", "A-")
-    s = s:gsub("META%-", "M-")
-    s = s:gsub("STRG%-", "C-")
-    s = s:gsub("MOUSE%s?WHEEL%s?UP", "MWU")
-    s = s:gsub("MOUSE%s?WHEEL%s?DOWN", "MWD")
-    s = s:gsub("MOUSE%s?BUTTON%s?(%d+)", "M%1")
-    s = s:gsub("NUMPAD%s?", "N")
-    s = s:gsub("PAGE%s?UP", "PgUp")
-    s = s:gsub("PAGE%s?DOWN", "PgDn")
-    s = s:gsub("SPACEBAR", "Spc")
-    return s
+    return FormatCompact(raw)
 end
 
 local function BuildSpellToKeyMap()
     local map = {}
     local function add(spellID, key)
         if spellID and spellID > 0 and key and key ~= "" then
-            map[spellID] = FormatKeyForDisplay(key)
+            map[spellID] = key
         end
     end
     for barIdx, prefix in ipairs(KEYBIND_BAR_PREFIXES) do
@@ -365,11 +410,17 @@ local function BuildSpellToKeyMap()
                         local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(id)
                         if override then add(override, key) end
                     elseif kind == "macro" and id then
-                        local macroSpell = GetMacroSpell and GetMacroSpell(id)
-                        if macroSpell then
-                            add(macroSpell, key)
-                            local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(macroSpell)
+                        if subType == "spell" then
+                            add(id, key)
+                            local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(id)
                             if override then add(override, key) end
+                        else
+                            local macroSpell = GetMacroSpell and GetMacroSpell(id)
+                            if macroSpell then
+                                add(macroSpell, key)
+                                local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(macroSpell)
+                                if override then add(override, key) end
+                            end
                         end
                     end
                 end
@@ -421,7 +472,15 @@ function Style:ApplyKeybind(button, cfg)
         spellToKeyCache = BuildSpellToKeyMap()
     end
     local spellID = GetSpellIDFromIcon(button)
-    local keyText = FindKeyForSpell(spellID, spellToKeyCache)
+    local keyText
+    if spellID and kb.manualBySpell and kb.manualBySpell[spellID] and kb.manualBySpell[spellID] ~= "" then
+        keyText = kb.manualBySpell[spellID]
+    elseif spellID and kb.manualBySpell and kb.manualBySpell[tostring(spellID)] and kb.manualBySpell[tostring(spellID)] ~= "" then
+        keyText = kb.manualBySpell[tostring(spellID)]
+    else
+        local rawKey = FindKeyForSpell(spellID, spellToKeyCache)
+        keyText = FormatKeyForDisplay(rawKey)
+    end
 
     if not button._cdf_keybindFrame then
         local f = CreateFrame("Frame", nil, button)
@@ -438,10 +497,28 @@ function Style:ApplyKeybind(button, cfg)
     fs:SetText(keyText or "")
 
     local flag = (kb.outline == "NONE") and "" or kb.outline
-    if fs._cdf_kbFontSize ~= kb.fontSize or fs._cdf_kbOutline ~= flag then
-        fs:SetFont(DEFAULT_FONT, kb.fontSize, flag)
+    local fontPath = ResolveFontPath(kb.fontName)
+    if fs._cdf_kbFontSize ~= kb.fontSize or fs._cdf_kbOutline ~= flag or fs._cdf_kbFontPath ~= fontPath then
+        if not fs:SetFont(fontPath, kb.fontSize, flag) then
+            fs:SetFont(DEFAULT_FONT, kb.fontSize, flag)
+            fontPath = DEFAULT_FONT
+        end
         fs._cdf_kbFontSize = kb.fontSize
         fs._cdf_kbOutline = flag
+        fs._cdf_kbFontPath = fontPath
+    end
+    if type(kb.textColor) == "table" then
+        local r = kb.textColor[1] or 1
+        local g = kb.textColor[2] or 1
+        local b = kb.textColor[3] or 1
+        local a = kb.textColor[4] or 1
+        if fs._cdf_kbR ~= r or fs._cdf_kbG ~= g or fs._cdf_kbB ~= b or fs._cdf_kbA ~= a then
+            fs:SetTextColor(r, g, b, a)
+            fs._cdf_kbR = r
+            fs._cdf_kbG = g
+            fs._cdf_kbB = b
+            fs._cdf_kbA = a
+        end
     end
     local ox, oy = kb.offsetX or 0, kb.offsetY or 0
     if fs._cdf_kbPoint ~= kb.point or fs._cdf_kbOx ~= ox or fs._cdf_kbOy ~= oy then
@@ -467,7 +544,7 @@ end
 -- 堆叠文字样式模块
 ------------------------------------------------------
 function Style:ApplyStack(button, cfg)
-    if not button or not cfg or not cfg.enabled then return end
+    if not button or not cfg then return end
 
     -- 查找堆叠计数 FontString
     local fs
@@ -484,11 +561,59 @@ function Style:ApplyStack(button, cfg)
     end
     if not fs then return end
 
+    if not cfg.enabled then
+        if fs._cdf_stackOrig then
+            local o = fs._cdf_stackOrig
+            if o.font and o.size then
+                fs:SetFont(o.font, o.size, o.flags or "")
+            end
+            if o.color then
+                fs:SetTextColor(o.color[1], o.color[2], o.color[3], o.color[4])
+            end
+            if o.point then
+                fs:ClearAllPoints()
+                pcall(fs.SetPoint, fs, o.point, o.relTo, o.relPoint, o.x or 0, o.y or 0)
+            end
+        end
+        fs._cdf_fontSize = nil
+        fs._cdf_outline = nil
+        fs._cdf_fontName = nil
+        fs._cdf_point = nil
+        fs._cdf_ox = nil
+        fs._cdf_oy = nil
+        return
+    end
+
+    if not fs._cdf_stackOrig then
+        local font, size, flags = fs:GetFont()
+        local p, relTo, relPoint, x, y = fs:GetPoint(1)
+        local r, g, b, a = fs:GetTextColor()
+        fs._cdf_stackOrig = {
+            font = font,
+            size = size,
+            flags = flags,
+            color = { r, g, b, a },
+            point = p,
+            relTo = relTo,
+            relPoint = relPoint,
+            x = x,
+            y = y,
+        }
+    end
+
+    local fontPath = ResolveFontPath(cfg.fontName)
     local flag = (cfg.outline == "NONE") and "" or cfg.outline
-    if fs._cdf_fontSize ~= cfg.fontSize or fs._cdf_outline ~= flag then
-        fs:SetFont(DEFAULT_FONT, cfg.fontSize, flag)
+    if fs._cdf_fontSize ~= cfg.fontSize or fs._cdf_outline ~= flag or fs._cdf_fontName ~= cfg.fontName then
+        if not fs:SetFont(fontPath, cfg.fontSize, flag) then
+            fs:SetFont(DEFAULT_FONT, cfg.fontSize, flag)
+        end
         fs._cdf_fontSize = cfg.fontSize
         fs._cdf_outline = flag
+        fs._cdf_fontName = cfg.fontName
+    end
+
+    if type(cfg.textColor) == "table" then
+        fs:SetTextColor(cfg.textColor[1] or 1, cfg.textColor[2] or 1, cfg.textColor[3] or 1, cfg.textColor[4] or 1)
     end
 
     local ox, oy = cfg.offsetX or 0, cfg.offsetY or 0
@@ -498,5 +623,100 @@ function Style:ApplyStack(button, cfg)
         fs._cdf_point = cfg.point
         fs._cdf_ox = ox
         fs._cdf_oy = oy
+    end
+end
+
+local function GetCountdownFontString(button)
+    if not button or not button.Cooldown then return nil end
+    local cd = button.Cooldown
+    if cd.GetCountdownFontString then
+        local fs = cd:GetCountdownFontString()
+        if fs and fs.SetFont then return fs end
+    end
+    for _, region in ipairs({ cd:GetRegions() }) do
+        if region and region.IsObjectType and region:IsObjectType("FontString") then
+            return region
+        end
+    end
+    return nil
+end
+
+function Style:ApplyCooldownText(button, cfg)
+    if not button or not cfg or not cfg.cooldownText then return end
+    local cdCfg = cfg.cooldownText
+    local fs = GetCountdownFontString(button)
+    if not fs then return end
+
+    if not cdCfg.enabled then
+        if fs._cdf_cdOrig then
+            local o = fs._cdf_cdOrig
+            if o.font and o.size then
+                fs:SetFont(o.font, o.size, o.flags or "")
+            end
+            if o.color then
+                fs:SetTextColor(o.color[1], o.color[2], o.color[3], o.color[4])
+            end
+            if o.point then
+                fs:ClearAllPoints()
+                pcall(fs.SetPoint, fs, o.point, o.relTo, o.relPoint, o.x or 0, o.y or 0)
+            end
+        end
+        fs._cdf_cdFontSize = nil
+        fs._cdf_cdOutline = nil
+        fs._cdf_cdFontPath = nil
+        fs._cdf_cdPoint = nil
+        return
+    end
+
+    if not fs._cdf_cdOrig then
+        local font, size, flags = fs:GetFont()
+        local r, g, b, a = fs:GetTextColor()
+        local p, relTo, relPoint, x, y = fs:GetPoint(1)
+        fs._cdf_cdOrig = {
+            font = font,
+            size = size,
+            flags = flags,
+            color = { r or 1, g or 1, b or 1, a or 1 },
+            point = p,
+            relTo = relTo,
+            relPoint = relPoint,
+            x = x,
+            y = y,
+        }
+    end
+
+    local flag = (cdCfg.outline == "NONE") and "" or cdCfg.outline
+    local fontPath = ResolveFontPath(cdCfg.fontName)
+    if fs._cdf_cdFontSize ~= cdCfg.fontSize or fs._cdf_cdOutline ~= flag or fs._cdf_cdFontPath ~= fontPath then
+        if not fs:SetFont(fontPath, cdCfg.fontSize, flag) then
+            fs:SetFont(DEFAULT_FONT, cdCfg.fontSize, flag)
+            fontPath = DEFAULT_FONT
+        end
+        fs._cdf_cdFontSize = cdCfg.fontSize
+        fs._cdf_cdOutline = flag
+        fs._cdf_cdFontPath = fontPath
+    end
+
+    if type(cdCfg.textColor) == "table" then
+        local r = cdCfg.textColor[1] or 1
+        local g = cdCfg.textColor[2] or 0.82
+        local b = cdCfg.textColor[3] or 0
+        local a = cdCfg.textColor[4] or 1
+        if fs._cdf_cdR ~= r or fs._cdf_cdG ~= g or fs._cdf_cdB ~= b or fs._cdf_cdA ~= a then
+            fs:SetTextColor(r, g, b, a)
+            fs._cdf_cdR = r
+            fs._cdf_cdG = g
+            fs._cdf_cdB = b
+            fs._cdf_cdA = a
+        end
+    end
+
+    local ox, oy = cdCfg.offsetX or 0, cdCfg.offsetY or 0
+    if fs._cdf_cdPoint ~= cdCfg.point or fs._cdf_cdOx ~= ox or fs._cdf_cdOy ~= oy then
+        fs:ClearAllPoints()
+        fs:SetPoint(cdCfg.point, button, cdCfg.point, ox, oy)
+        fs._cdf_cdPoint = cdCfg.point
+        fs._cdf_cdOx = ox
+        fs._cdf_cdOy = oy
     end
 end
