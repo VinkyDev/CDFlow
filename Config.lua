@@ -149,12 +149,13 @@ ns.defaults = {
 
     -- Buff 增益高亮（所有 buff 显示时高亮）
     buffGlow = {
-        enabled   = false,
-        style     = "PIXEL",        -- 同 highlight
-        lines     = 8,
-        frequency = 0.2,
-        thickness = 2,
-        scale     = 1,
+        enabled     = false,
+        style       = "PIXEL",      -- 同 highlight
+        lines       = 8,
+        frequency   = 0.2,
+        thickness   = 2,
+        scale       = 1,
+        spellFilter = {},           -- 空 = 全部高亮；非空 = 仅高亮列表中的技能ID
     },
 
 }

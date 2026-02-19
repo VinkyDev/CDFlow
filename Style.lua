@@ -448,6 +448,7 @@ local function GetSpellIDFromIcon(icon)
     end
     return nil
 end
+Style.GetSpellIDFromIcon = GetSpellIDFromIcon
 
 local function FindKeyForSpell(spellID, map)
     if not spellID or not map then return "" end
@@ -696,14 +697,20 @@ function Style:ApplyCooldownText(button, cfg)
 
     local flag = (cdCfg.outline == "NONE") and "" or cdCfg.outline
     local fontPath = ResolveFontPath(cdCfg.fontName)
-    if fs._cdf_cdFontSize ~= cdCfg.fontSize or fs._cdf_cdOutline ~= flag or fs._cdf_cdFontPath ~= fontPath then
-        if not fs:SetFont(fontPath, cdCfg.fontSize, flag) then
-            fs:SetFont(DEFAULT_FONT, cdCfg.fontSize, flag)
+    local sz = (cdCfg.fontSize == nil or cdCfg.fontSize <= 0) and 1 or cdCfg.fontSize
+    local visible = cdCfg.fontSize and cdCfg.fontSize > 0
+    if fs._cdf_cdFontSize ~= sz or fs._cdf_cdOutline ~= flag or fs._cdf_cdFontPath ~= fontPath then
+        if not fs:SetFont(fontPath, sz, flag) then
+            fs:SetFont(DEFAULT_FONT, sz, flag)
             fontPath = DEFAULT_FONT
         end
-        fs._cdf_cdFontSize = cdCfg.fontSize
+        fs._cdf_cdFontSize = sz
         fs._cdf_cdOutline = flag
         fs._cdf_cdFontPath = fontPath
+    end
+    if fs._cdf_cdVisible ~= visible then
+        fs._cdf_cdVisible = visible
+        if visible then fs:Show() else fs:Hide() end
     end
 
     if type(cdCfg.textColor) == "table" then

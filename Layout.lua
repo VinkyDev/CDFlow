@@ -184,8 +184,14 @@ function Layout:RefreshBuffViewer(viewer, cfg)
 
     -- 增益高亮：仅在状态变化时更新，避免频繁 Stop/Start 导致闪烁
     if buffGlowCfg then
+        local hasFilter = buffGlowCfg.spellFilter and next(buffGlowCfg.spellFilter)
         for _, icon in ipairs(allIcons) do
             local shouldGlow = visibleSet[icon] and buffGlowCfg.enabled
+            -- 技能ID过滤：有过滤列表时，仅对列表内的技能高亮
+            if shouldGlow and hasFilter then
+                local spellID = Style.GetSpellIDFromIcon(icon)
+                shouldGlow = spellID and buffGlowCfg.spellFilter[spellID] or false
+            end
             local hasGlow = icon._cdf_buffGlowActive
             local styleMatch = hasGlow and icon._cdf_buffGlowType == buffGlowCfg.style
 

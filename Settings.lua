@@ -432,6 +432,84 @@ local function BuildHighlightTab(scroll)
         buffOptGroup:AddChild(dd)
 
         BuildStyleOptions(buffOptGroup, buffCfg, refreshBuffGlowStyle)
+
+        -- 技能ID过滤列表
+        local filterGroup = AceGUI:Create("InlineGroup")
+        filterGroup:SetTitle(L.buffGlowFilter)
+        filterGroup:SetFullWidth(true)
+        filterGroup:SetLayout("Flow")
+        buffOptGroup:AddChild(filterGroup)
+
+        local hint = AceGUI:Create("Label")
+        hint:SetText("|cffaaaaaa" .. L.buffGlowFilterHint .. "|r")
+        hint:SetFullWidth(true)
+        hint:SetFontObject(GameFontHighlightSmall)
+        filterGroup:AddChild(hint)
+
+        if type(buffCfg.spellFilter) ~= "table" then
+            buffCfg.spellFilter = {}
+        end
+
+        local inputSpellID
+
+        local listLabel = AceGUI:Create("Label")
+        listLabel:SetFullWidth(true)
+        listLabel:SetFontObject(GameFontHighlightSmall)
+
+        local function RebuildFilterList()
+            local ids = {}
+            for id in pairs(buffCfg.spellFilter) do
+                ids[#ids + 1] = id
+            end
+            table.sort(ids)
+            local lines = { "|cff88ccff" .. L.buffGlowFilterTitle .. "|r" }
+            for _, id in ipairs(ids) do
+                lines[#lines + 1] = tostring(id)
+            end
+            if #ids == 0 then
+                lines[#lines + 1] = "|cff888888-|r"
+            end
+            listLabel:SetText(table.concat(lines, "\n"))
+        end
+
+        local idBox = AceGUI:Create("EditBox")
+        idBox:SetLabel(L.spellID)
+        idBox:SetText("")
+        idBox:SetFullWidth(true)
+        idBox:SetCallback("OnEnterPressed", function(_, _, v)
+            inputSpellID = tonumber(v)
+        end)
+        filterGroup:AddChild(idBox)
+
+        local addBtn = AceGUI:Create("Button")
+        addBtn:SetText(L.buffGlowFilterAdd)
+        addBtn:SetFullWidth(true)
+        addBtn:SetCallback("OnClick", function()
+            local id = inputSpellID or tonumber(idBox.editbox:GetText())
+            if id and id > 0 then
+                buffCfg.spellFilter[id] = true
+                RebuildFilterList()
+                refreshBuffLayout()
+            end
+        end)
+        filterGroup:AddChild(addBtn)
+
+        local removeBtn = AceGUI:Create("Button")
+        removeBtn:SetText(L.buffGlowFilterRemove)
+        removeBtn:SetFullWidth(true)
+        removeBtn:SetCallback("OnClick", function()
+            local id = inputSpellID or tonumber(idBox.editbox:GetText())
+            if id and id > 0 then
+                buffCfg.spellFilter[id] = nil
+                RebuildFilterList()
+                refreshBuffLayout()
+            end
+        end)
+        filterGroup:AddChild(removeBtn)
+
+        filterGroup:AddChild(listLabel)
+        RebuildFilterList()
+
         refreshScrollLayout()
     end
 
@@ -448,6 +526,7 @@ end
 local function BuildTextOverlaySection(scroll, title, cfg, options)
     options = options or {}
     local maxOffset = options.maxOffset or 20
+    local minSize = options.minSize or 6
     local maxSize = options.maxSize or 48
     local enableLabel = options.enableLabel or L.enable
 
@@ -483,8 +562,8 @@ local function BuildTextOverlaySection(scroll, title, cfg, options)
             return
         end
 
-        -- 字号
-        AddSlider(container, L.fontSize, 6, maxSize, 1,
+        -- 字号（minSize=0 时支持隐藏冷却读秒）
+        AddSlider(container, L.fontSize, minSize, maxSize, 1,
             function() return cfg.fontSize end,
             function(v) cfg.fontSize = v end)
 
@@ -761,10 +840,11 @@ local function BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRo
         })
     end
 
-    -- 冷却读秒
+    -- 冷却读秒（支持字号 0 隐藏）
     if cfg.cooldownText then
         BuildTextOverlaySection(scroll, L.cooldownText, cfg.cooldownText, {
             enableLabel = L.customizeStyle,
+            minSize = 0,
             maxSize = 48,
             maxOffset = 30,
         })
