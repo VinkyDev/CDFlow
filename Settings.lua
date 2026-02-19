@@ -526,7 +526,6 @@ end
 local function BuildTextOverlaySection(scroll, title, cfg, options)
     options = options or {}
     local maxOffset = options.maxOffset or 20
-    local minSize = options.minSize or 6
     local maxSize = options.maxSize or 48
     local enableLabel = options.enableLabel or L.enable
 
@@ -562,8 +561,8 @@ local function BuildTextOverlaySection(scroll, title, cfg, options)
             return
         end
 
-        -- 字号（minSize=0 时支持隐藏冷却读秒）
-        AddSlider(container, L.fontSize, minSize, maxSize, 1,
+        -- 字号
+        AddSlider(container, L.fontSize, 6, maxSize, 1,
             function() return cfg.fontSize end,
             function(v) cfg.fontSize = v end)
 
@@ -840,11 +839,10 @@ local function BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRo
         })
     end
 
-    -- 冷却读秒（支持字号 0 隐藏）
+    -- 冷却读秒
     if cfg.cooldownText then
         BuildTextOverlaySection(scroll, L.cooldownText, cfg.cooldownText, {
             enableLabel = L.customizeStyle,
-            minSize = 0,
             maxSize = 48,
             maxOffset = 30,
         })
