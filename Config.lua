@@ -8,6 +8,7 @@ ns.defaults = {
     -- 全局样式
     iconZoom    = 0.08,     -- 图标纹理裁剪量
     borderSize  = 1,        -- 边框像素粗细
+    suppressDebuffBorder = true, -- 屏蔽 debuff 红色边框
     trackedBarsGrowDir = "BOTTOM", -- 追踪状态栏增长方向：BOTTOM/TOP
 
     -- 核心技能查看器

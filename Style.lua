@@ -131,6 +131,15 @@ function Style:ApplyIcon(button, w, h, zoom, borderSize)
     end
 
     button._cdf_styled = true
+
+    -- 屏蔽 Debuff 红框
+    if button.DebuffBorder then
+        local suppress = ns.db and ns.db.suppressDebuffBorder
+        local targetAlpha = suppress and 0 or 1
+        if button.DebuffBorder:GetAlpha() ~= targetAlpha then
+            button.DebuffBorder:SetAlpha(targetAlpha)
+        end
+    end
 end
 
 ------------------------------------------------------

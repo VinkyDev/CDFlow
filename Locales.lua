@@ -35,6 +35,7 @@ local S = {
     spacingY        = { "行间距",       "Row Spacing" },
     iconZoom        = { "图标裁剪",     "Icon Zoom" },
     borderSize      = { "边框粗细",     "Border Size" },
+    suppressDebuffBorder = { "屏蔽 Debuff 红框", "Suppress Debuff Border" },
     fontSize        = { "字号",         "Font Size" },
     fontFamily      = { "字体",         "Font" },
     textColor       = { "文字颜色",     "Text Color" },

@@ -215,6 +215,10 @@ local function BuildGeneralTab(scroll)
         function() return ns.db.borderSize end,
         function(v) ns.db.borderSize = v end)
 
+    AddCheckbox(scroll, L.suppressDebuffBorder,
+        function() return ns.db.suppressDebuffBorder or false end,
+        function(v) ns.db.suppressDebuffBorder = v end)
+
     -- 快捷操作
     AddHeading(scroll, "")
 
