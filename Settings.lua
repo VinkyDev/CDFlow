@@ -1129,7 +1129,7 @@ function ns:InitSettings()
         title:SetText("|cff00ccffCDFlow|r")
 
         -- 版本号
-        local version = "2.0.0"
+        local version = "2.0.1"
         if C_AddOns and C_AddOns.GetAddOnMetadata then
             version = C_AddOns.GetAddOnMetadata("CDFlow", "Version") or version
         elseif GetAddOnMetadata then

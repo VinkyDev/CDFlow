@@ -687,18 +687,19 @@ local function UpdateChargeBar(barFrame)
         if type(exactCharges) == "number" and exactCharges >= maxCharges then
             barFrame._text:SetText("")
         elseif chargeDurObj then
-            local ok, timeStr = pcall(function()
-                local remaining = chargeDurObj:GetRemainingDuration()
-                local rn = tonumber(remaining)
-                if not rn then return nil end
-                local slotsLeft = maxCharges - (type(exactCharges) == "number" and exactCharges or 0) - 1
-                if slotsLeft > 0 then
-                    local cdn = tonumber(chargeInfo.cooldownDuration)
-                    if cdn then rn = rn + cdn * slotsLeft end
+            local remaining = chargeDurObj:GetRemainingDuration()
+            local ok, result = pcall(function()
+                local num = tonumber(remaining)
+                if num then
+                    return string.format("%.1f", num)
                 end
-                return string.format("%.1f", rn)
+                return remaining
             end)
-            barFrame._text:SetText(ok and timeStr or "")
+            if ok and result then
+                barFrame._text:SetText(result)
+            else
+                barFrame._text:SetText(remaining or "")
+            end
         else
             barFrame._text:SetText("")
         end

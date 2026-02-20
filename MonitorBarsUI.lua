@@ -380,7 +380,8 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     styleGroup:AddChild(iconCB)
 
     local textCB = AceGUI:Create("CheckBox")
-    textCB:SetLabel(L.mbShowText)
+    local showTextLabel = barCfg.barType == "charge" and L.mbShowTextCharge or L.mbShowTextStack
+    textCB:SetLabel(showTextLabel)
     textCB:SetValue(barCfg.showText ~= false)
     textCB:SetFullWidth(true)
     textCB:SetCallback("OnValueChanged", function(_, _, val)
