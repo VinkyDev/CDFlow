@@ -52,13 +52,20 @@ local function CollectAllIcons(viewer)
 end
 
 -- 从全量列表中筛选可见图标，同时记录每个图标的固定槽位索引
+-- 跳过被监控条隐藏（hideFromCDM）的图标，并将其 alpha 置 0
 local function SplitVisible(allIcons)
     local visible = {}
     local slotOf = {}
+    local suppressed = ns.cdmSuppressedCooldownIDs
     for slot, icon in ipairs(allIcons) do
         if icon:IsShown() then
-            visible[#visible + 1] = icon
-            slotOf[icon] = slot - 1   -- 0-based 槽位
+            if suppressed and suppressed[icon.cooldownID] then
+                icon:SetAlpha(0)
+            else
+                icon:SetAlpha(1)
+                visible[#visible + 1] = icon
+                slotOf[icon] = slot - 1   -- 0-based 槽位
+            end
         end
     end
     return visible, slotOf

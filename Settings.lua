@@ -265,6 +265,151 @@ local function BuildGeneralTab(scroll)
     end)
     scroll:AddChild(cdmBtn)
 
+    -- 配置管理
+    AddHeading(scroll, L.profileManage)
+
+    local profiles = ns:GetProfileList()
+    local profileItems, profileOrder = {}, {}
+    for name in pairs(profiles) do
+        profileItems[name] = name
+        profileOrder[#profileOrder + 1] = name
+    end
+    table.sort(profileOrder)
+
+    local selectedProfile = profileOrder[1]
+
+    local nameBox = AceGUI:Create("EditBox")
+    nameBox:SetLabel(L.profileName)
+    nameBox:SetFullWidth(true)
+    nameBox:SetCallback("OnEnterPressed", function() end)
+    scroll:AddChild(nameBox)
+
+    local saveBtn = AceGUI:Create("Button")
+    saveBtn:SetText(L.profileSave)
+    saveBtn:SetFullWidth(true)
+    saveBtn:SetCallback("OnClick", function()
+        local name = nameBox:GetText()
+        if not name or name:match("^%s*$") then
+            print("|cff00ccff[CDFlow]|r " .. L.profileNoName)
+            return
+        end
+        name = name:match("^%s*(.-)%s*$")
+        ns:SaveProfile(name)
+        print("|cff00ccff[CDFlow]|r " .. string.format(L.profileSaved, name))
+        local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
+        if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+    end)
+    scroll:AddChild(saveBtn)
+
+    if #profileOrder > 0 then
+        local profileDD = AceGUI:Create("Dropdown")
+        profileDD:SetLabel(L.profileSelect)
+        profileDD:SetList(profileItems, profileOrder)
+        profileDD:SetValue(selectedProfile)
+        profileDD:SetFullWidth(true)
+        profileDD:SetCallback("OnValueChanged", function(_, _, val)
+            selectedProfile = val
+        end)
+        scroll:AddChild(profileDD)
+
+        local loadBtnGroup = AceGUI:Create("SimpleGroup")
+        loadBtnGroup:SetFullWidth(true)
+        loadBtnGroup:SetLayout("Flow")
+        scroll:AddChild(loadBtnGroup)
+
+        local loadBtn = AceGUI:Create("Button")
+        loadBtn:SetText(L.profileLoad)
+        loadBtn:SetWidth(200)
+        loadBtn:SetCallback("OnClick", function()
+            if not selectedProfile then return end
+            if ns:LoadProfile(selectedProfile) then
+                print("|cff00ccff[CDFlow]|r " .. string.format(L.profileLoaded, selectedProfile))
+                Layout:RefreshAll()
+                if ns.MonitorBars then ns.MonitorBars:RebuildAllBars() end
+                local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
+                if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+            end
+        end)
+        loadBtnGroup:AddChild(loadBtn)
+
+        local delBtn = AceGUI:Create("Button")
+        delBtn:SetText("|cffff4444" .. L.profileDelete .. "|r")
+        delBtn:SetWidth(200)
+        delBtn:SetCallback("OnClick", function()
+            if not selectedProfile then return end
+            ns:DeleteProfile(selectedProfile)
+            print("|cff00ccff[CDFlow]|r " .. string.format(L.profileDeleted, selectedProfile))
+            local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
+            if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+        end)
+        loadBtnGroup:AddChild(delBtn)
+    else
+        local noProfile = AceGUI:Create("Label")
+        noProfile:SetText("|cffaaaaaa" .. L.profileNone .. "|r")
+        noProfile:SetFullWidth(true)
+        scroll:AddChild(noProfile)
+    end
+
+    -- 导入/导出
+    AddHeading(scroll, L.importExport)
+
+    local exportBtn = AceGUI:Create("Button")
+    exportBtn:SetText(L.exportBtn)
+    exportBtn:SetFullWidth(true)
+    scroll:AddChild(exportBtn)
+
+    local exportBox = AceGUI:Create("MultiLineEditBox")
+    exportBox:SetLabel(L.exportHint)
+    exportBox:SetFullWidth(true)
+    exportBox:SetNumLines(4)
+    exportBox:SetText("")
+    exportBox:DisableButton(true)
+    scroll:AddChild(exportBox)
+
+    exportBtn:SetCallback("OnClick", function()
+        local str = ns:ExportConfig()
+        exportBox:SetText(str)
+        exportBox:SetFocus()
+        exportBox:HighlightText()
+    end)
+
+    local importNameBox = AceGUI:Create("EditBox")
+    importNameBox:SetLabel(L.importName)
+    importNameBox:SetFullWidth(true)
+    importNameBox:SetCallback("OnEnterPressed", function() end)
+    scroll:AddChild(importNameBox)
+
+    local importBox = AceGUI:Create("MultiLineEditBox")
+    importBox:SetLabel(L.importHint)
+    importBox:SetFullWidth(true)
+    importBox:SetNumLines(4)
+    importBox:SetText("")
+    importBox:DisableButton(true)
+    scroll:AddChild(importBox)
+
+    local importBtn = AceGUI:Create("Button")
+    importBtn:SetText(L.importBtn)
+    importBtn:SetFullWidth(true)
+    importBtn:SetCallback("OnClick", function()
+        local name = importNameBox:GetText()
+        if not name or name:match("^%s*$") then
+            print("|cff00ccff[CDFlow]|r " .. L.profileNoName)
+            return
+        end
+        name = name:match("^%s*(.-)%s*$")
+        local str = importBox:GetText()
+        if not str or str == "" then return end
+        local ok, errMsg = ns:ImportConfig(str, name)
+        if ok then
+            print("|cff00ccff[CDFlow]|r " .. string.format(L.importSuccess, name))
+            local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
+            if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+        else
+            print("|cff00ccff[CDFlow]|r " .. string.format(L.importFail, errMsg or "unknown"))
+        end
+    end)
+    scroll:AddChild(importBtn)
+
     -- 重置为默认配置
     AddHeading(scroll, "")
 
@@ -860,11 +1005,12 @@ end
 -- 选项卡定义
 ------------------------------------------------------
 local TAB_LIST = {
-    { value = "general",   text = L.general },
-    { value = "essential", text = L.essential },
-    { value = "utility",   text = L.utility },
-    { value = "buffs",     text = L.buffs },
-    { value = "highlight", text = L.highlight },
+    { value = "general",      text = L.general },
+    { value = "essential",    text = L.essential },
+    { value = "utility",      text = L.utility },
+    { value = "buffs",        text = L.buffs },
+    { value = "highlight",    text = L.highlight },
+    { value = "monitorBars",  text = L.monitorBars },
 }
 
 local function OnTabSelected(container, _, group)
@@ -887,6 +1033,10 @@ local function OnTabSelected(container, _, group)
         BuildViewerTab(scroll, "buffs", true, true)
     elseif group == "highlight" then
         BuildHighlightTab(scroll)
+    elseif group == "monitorBars" then
+        if ns.BuildMonitorBarsTab then
+            ns.BuildMonitorBarsTab(scroll)
+        end
     end
 
     -- 延迟一帧重新布局，确保嵌套容器高度计算正确
@@ -979,7 +1129,7 @@ function ns:InitSettings()
         title:SetText("|cff00ccffCDFlow|r")
 
         -- 版本号
-        local version = "1.3.0"
+        local version = "2.0.0"
         if C_AddOns and C_AddOns.GetAddOnMetadata then
             version = C_AddOns.GetAddOnMetadata("CDFlow", "Version") or version
         elseif GetAddOnMetadata then

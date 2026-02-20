@@ -7,6 +7,7 @@ local _, ns = ...
 local Layout = ns.Layout
 local Style  = ns.Style
 local L = ns.L
+local MB = ns.MonitorBars
 
 -- Buff 图标子帧 Hook（防抖：避免 OnActiveStateChanged 等频繁触发导致闪烁）
 ------------------------------------------------------
@@ -146,7 +147,11 @@ local eventHandlers = {}
 
 eventHandlers["PLAYER_ENTERING_WORLD"] = function()
     RequestRefreshAll(0)
-    C_Timer.After(0.5, function() Layout:RefreshAll() end)
+    C_Timer.After(0.5, function()
+        Layout:RefreshAll()
+        MB:ScanCDMViewers()
+        MB:RebuildAllBars()
+    end)
 end
 
 eventHandlers["EDIT_MODE_LAYOUTS_UPDATED"] = function()
@@ -155,6 +160,10 @@ end
 
 eventHandlers["PLAYER_SPECIALIZATION_CHANGED"] = function()
     RequestRefreshAll(0)
+    C_Timer.After(0.5, function()
+        MB:ScanCDMViewers()
+        MB:RebuildAllBars()
+    end)
 end
 
 eventHandlers["TRAIT_CONFIG_UPDATED"] = function()
@@ -180,6 +189,31 @@ eventHandlers["ACTIONBAR_HIDEGRID"] = function()
         Style:InvalidateKeybindCache()
     end
     RequestRefreshAll(0)
+end
+
+-- 监控条事件
+eventHandlers["UNIT_AURA"] = function(unit)
+    MB:OnAuraUpdate()
+end
+
+eventHandlers["SPELL_UPDATE_CHARGES"] = function()
+    MB:OnChargeUpdate()
+end
+
+eventHandlers["SPELL_UPDATE_COOLDOWN"] = function()
+    MB:OnCooldownUpdate()
+end
+
+eventHandlers["PLAYER_REGEN_ENABLED"] = function()
+    MB:OnCombatLeave()
+end
+
+eventHandlers["PLAYER_REGEN_DISABLED"] = function()
+    MB:OnCombatEnter()
+end
+
+eventHandlers["PLAYER_TARGET_CHANGED"] = function()
+    MB:OnTargetChanged()
 end
 
 -- 注册所有事件
@@ -216,6 +250,12 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
     if ns.InitSettings then
         ns:InitSettings()
     end
+
+    -- 初始化监控条（延迟，等 CDM 就绪）
+    C_Timer.After(1, function()
+        MB:ScanCDMViewers()
+        MB:InitAllBars()
+    end)
 
     -- 打印加载提示
     print("|cff00ccff[CDFlow]|r " .. format(L.loaded, L.slashHelp))

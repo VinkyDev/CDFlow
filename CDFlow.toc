@@ -4,8 +4,8 @@
 ## Notes-zhCN: 轻量级冷却管理器美化
 ## Notes-zhTW: 輕量級冷卻管理器美化
 ## Author: Vinky
-## Version: 1.3.0
-## SavedVariables: CDFlowDB
+## Version: 2.0.0
+## SavedVariables: CDFlowDB, CDFlowDB_Profiles
 ## IconTexture: Interface\AddOns\CDFlow\Media\logo
 ## Category: Combat
 ## Category-zhCN: 战斗
@@ -17,5 +17,7 @@ Locales.lua
 Config.lua
 Style.lua
 Layout.lua
+MonitorBars.lua
 Core.lua
 Settings.lua
+MonitorBarsUI.lua
