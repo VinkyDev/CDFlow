@@ -47,21 +47,18 @@ end
 -- Hook 三个冷却查看器的 RefreshLayout
 ------------------------------------------------------
 local function RegisterHooks()
-    -- 核心技能
     if EssentialCooldownViewer then
         hooksecurefunc(EssentialCooldownViewer, "RefreshLayout", function()
             Layout:RefreshViewer("EssentialCooldownViewer")
         end)
     end
 
-    -- 工具技能
     if UtilityCooldownViewer then
         hooksecurefunc(UtilityCooldownViewer, "RefreshLayout", function()
             Layout:RefreshViewer("UtilityCooldownViewer")
         end)
     end
 
-    -- 增益图标
     if BuffIconCooldownViewer then
         hooksecurefunc(BuffIconCooldownViewer, "RefreshLayout", function()
             HookBuffChildren()
@@ -69,7 +66,6 @@ local function RegisterHooks()
         end)
     end
 
-    -- 追踪状态栏
     if BuffBarCooldownViewer then
         hooksecurefunc(BuffBarCooldownViewer, "RefreshLayout", function()
             Layout:RefreshTrackedBars()
@@ -83,7 +79,6 @@ end
 local VIEWER_SET = {}
 
 local function SetupGlowHooks()
-    -- 记录三个查看器用于快速判断
     if EssentialCooldownViewer then VIEWER_SET[EssentialCooldownViewer] = true end
     if UtilityCooldownViewer   then VIEWER_SET[UtilityCooldownViewer]   = true end
     if BuffIconCooldownViewer  then VIEWER_SET[BuffIconCooldownViewer]  = true end
@@ -97,7 +92,6 @@ local function SetupGlowHooks()
 
         frame._cdf_alertActive = true
 
-        -- 延迟一帧，等原生高亮创建完毕后再替换
         C_Timer.After(0, function()
             if frame._cdf_alertActive then
                 Style:ShowHighlight(frame)
@@ -140,93 +134,6 @@ local function RegisterEventRegistryCallbacks()
 end
 
 ------------------------------------------------------
--- 游戏事件处理
-------------------------------------------------------
-local eventFrame = CreateFrame("Frame")
-local eventHandlers = {}
-
-eventHandlers["PLAYER_ENTERING_WORLD"] = function()
-    RequestRefreshAll(0)
-    C_Timer.After(0.5, function()
-        Layout:RefreshAll()
-        MB:ScanCDMViewers()
-        MB:RebuildAllBars()
-    end)
-end
-
-eventHandlers["EDIT_MODE_LAYOUTS_UPDATED"] = function()
-    RequestRefreshAll(0)
-end
-
-eventHandlers["PLAYER_SPECIALIZATION_CHANGED"] = function()
-    RequestRefreshAll(0)
-    C_Timer.After(0.5, function()
-        MB:ScanCDMViewers()
-        MB:RebuildAllBars()
-    end)
-end
-
-eventHandlers["TRAIT_CONFIG_UPDATED"] = function()
-    RequestRefreshAll(0)
-end
-
-eventHandlers["UPDATE_BINDINGS"] = function()
-    if Style.InvalidateKeybindCache then
-        Style:InvalidateKeybindCache()
-    end
-    RequestRefreshAll(0)
-end
-
-eventHandlers["UPDATE_BONUS_ACTIONBAR"] = function()
-    if Style.InvalidateKeybindCache then
-        Style:InvalidateKeybindCache()
-    end
-    RequestRefreshAll(0)
-end
-
-eventHandlers["ACTIONBAR_HIDEGRID"] = function()
-    if Style.InvalidateKeybindCache then
-        Style:InvalidateKeybindCache()
-    end
-    RequestRefreshAll(0)
-end
-
--- 监控条事件
-eventHandlers["UNIT_AURA"] = function(unit)
-    MB:OnAuraUpdate()
-end
-
-eventHandlers["SPELL_UPDATE_CHARGES"] = function()
-    MB:OnChargeUpdate()
-end
-
-eventHandlers["SPELL_UPDATE_COOLDOWN"] = function()
-    MB:OnCooldownUpdate()
-end
-
-eventHandlers["PLAYER_REGEN_ENABLED"] = function()
-    MB:OnCombatLeave()
-end
-
-eventHandlers["PLAYER_REGEN_DISABLED"] = function()
-    MB:OnCombatEnter()
-end
-
-eventHandlers["PLAYER_TARGET_CHANGED"] = function()
-    MB:OnTargetChanged()
-end
-
--- 注册所有事件
-for event in pairs(eventHandlers) do
-    eventFrame:RegisterEvent(event)
-end
-
-eventFrame:SetScript("OnEvent", function(_, event, ...)
-    local handler = eventHandlers[event]
-    if handler then handler(...) end
-end)
-
-------------------------------------------------------
 -- 插件加载入口
 ------------------------------------------------------
 local initFrame = CreateFrame("Frame")
@@ -234,17 +141,111 @@ initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(_, _, addonName)
     if addonName ~= "CDFlow" then return end
 
-    -- 加载配置（角色独立存储，自动保存）
     ns:LoadConfig()
 
-    -- 注册 Hooks
-    RegisterHooks()
+    local mods = ns.db.modules
 
-    -- 注册高亮特效 Hooks
-    SetupGlowHooks()
+    -- CDM 美化模块
+    if mods.cdmBeautify then
+        RegisterHooks()
+        RegisterEventRegistryCallbacks()
+    end
 
-    -- 注册 EventRegistry 回调
-    RegisterEventRegistryCallbacks()
+    -- 高亮特效模块（依赖 CDM 美化）
+    if mods.highlight and mods.cdmBeautify then
+        SetupGlowHooks()
+    end
+
+    -- 按模块注册游戏事件
+    local eventFrame = CreateFrame("Frame")
+    local eventHandlers = {}
+
+    eventHandlers["PLAYER_ENTERING_WORLD"] = function()
+        if mods.cdmBeautify then RequestRefreshAll(0) end
+        C_Timer.After(0.5, function()
+            if mods.cdmBeautify then Layout:RefreshAll() end
+            if mods.monitorBars then
+                MB:ScanCDMViewers()
+                MB:RebuildAllBars()
+            end
+        end)
+    end
+
+    eventHandlers["PLAYER_SPECIALIZATION_CHANGED"] = function()
+        if mods.cdmBeautify then RequestRefreshAll(0) end
+        if mods.monitorBars then
+            C_Timer.After(0.5, function()
+                MB:ScanCDMViewers()
+                MB:RebuildAllBars()
+            end)
+        end
+    end
+
+    if mods.cdmBeautify then
+        eventHandlers["EDIT_MODE_LAYOUTS_UPDATED"] = function()
+            RequestRefreshAll(0)
+        end
+
+        eventHandlers["TRAIT_CONFIG_UPDATED"] = function()
+            RequestRefreshAll(0)
+        end
+
+        eventHandlers["UPDATE_BINDINGS"] = function()
+            if Style.InvalidateKeybindCache then
+                Style:InvalidateKeybindCache()
+            end
+            RequestRefreshAll(0)
+        end
+
+        eventHandlers["UPDATE_BONUS_ACTIONBAR"] = function()
+            if Style.InvalidateKeybindCache then
+                Style:InvalidateKeybindCache()
+            end
+            RequestRefreshAll(0)
+        end
+
+        eventHandlers["ACTIONBAR_HIDEGRID"] = function()
+            if Style.InvalidateKeybindCache then
+                Style:InvalidateKeybindCache()
+            end
+            RequestRefreshAll(0)
+        end
+    end
+
+    if mods.monitorBars then
+        eventHandlers["UNIT_AURA"] = function(unit)
+            MB:OnAuraUpdate()
+        end
+
+        eventHandlers["SPELL_UPDATE_CHARGES"] = function()
+            MB:OnChargeUpdate()
+        end
+
+        eventHandlers["SPELL_UPDATE_COOLDOWN"] = function()
+            MB:OnCooldownUpdate()
+        end
+
+        eventHandlers["PLAYER_REGEN_ENABLED"] = function()
+            MB:OnCombatLeave()
+        end
+
+        eventHandlers["PLAYER_REGEN_DISABLED"] = function()
+            MB:OnCombatEnter()
+        end
+
+        eventHandlers["PLAYER_TARGET_CHANGED"] = function()
+            MB:OnTargetChanged()
+        end
+    end
+
+    for event in pairs(eventHandlers) do
+        eventFrame:RegisterEvent(event)
+    end
+
+    eventFrame:SetScript("OnEvent", function(_, event, ...)
+        local handler = eventHandlers[event]
+        if handler then handler(...) end
+    end)
 
     -- 初始化设置面板
     if ns.InitSettings then
@@ -252,12 +253,13 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
     end
 
     -- 初始化监控条（延迟，等 CDM 就绪）
-    C_Timer.After(1, function()
-        MB:ScanCDMViewers()
-        MB:InitAllBars()
-    end)
+    if mods.monitorBars then
+        C_Timer.After(1, function()
+            MB:ScanCDMViewers()
+            MB:InitAllBars()
+        end)
+    end
 
-    -- 打印加载提示
     print("|cff00ccff[CDFlow]|r " .. format(L.loaded, L.slashHelp))
 
     initFrame:UnregisterAllEvents()

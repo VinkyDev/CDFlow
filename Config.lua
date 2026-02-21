@@ -5,6 +5,13 @@ local _, ns = ...
 ------------------------------------------------------
 
 ns.defaults = {
+    -- 功能模块开关
+    modules = {
+        cdmBeautify = true,
+        highlight   = true,
+        monitorBars = true,
+    },
+
     -- 全局样式
     iconZoom    = 0.08,     -- 图标纹理裁剪量
     borderSize  = 1,        -- 边框像素粗细

@@ -191,33 +191,96 @@ end
 ------------------------------------------------------
 local function BuildGeneralTab(scroll)
 
-    -- Tips 提示
-    local tipGroup = AceGUI:Create("InlineGroup")
-    tipGroup:SetTitle("|cffff8800Tips|r")
-    tipGroup:SetFullWidth(true)
-    tipGroup:SetLayout("Flow")
-    scroll:AddChild(tipGroup)
+    local mods = ns.db.modules
 
-    local tipLabel = AceGUI:Create("Label")
-    tipLabel:SetText("|cffff8800" .. L.overviewTip .. "|r")
-    tipLabel:SetFullWidth(true)
-    tipLabel:SetFontObject(GameFontHighlightSmall)
-    tipGroup:AddChild(tipLabel)
+    -- 功能模块区
+    local moduleGroup = AceGUI:Create("InlineGroup")
+    moduleGroup:SetTitle(L.moduleManage)
+    moduleGroup:SetFullWidth(true)
+    moduleGroup:SetLayout("Flow")
+    scroll:AddChild(moduleGroup)
 
-    -- 通用配置
-    AddHeading(scroll, L.generalSettings)
+    local reloadBtn = AceGUI:Create("Button")
+    reloadBtn:SetText("|cffff8800/reload|r  -  " .. L.moduleReloadHint)
+    reloadBtn:SetFullWidth(true)
+    reloadBtn:SetCallback("OnClick", function() ReloadUI() end)
+    moduleGroup:AddChild(reloadBtn)
 
-    AddSlider(scroll, L.iconZoom, 0, 0.3, 0.01,
-        function() return ns.db.iconZoom end,
-        function(v) ns.db.iconZoom = v end)
+    local cbBeautify = AceGUI:Create("CheckBox")
+    cbBeautify:SetLabel(L.moduleCDMBeautify)
+    cbBeautify:SetValue(mods.cdmBeautify)
+    cbBeautify:SetFullWidth(true)
+    cbBeautify:SetCallback("OnValueChanged", function(_, _, val) mods.cdmBeautify = val end)
+    moduleGroup:AddChild(cbBeautify)
 
-    AddSlider(scroll, L.borderSize, 0, 4, 1,
-        function() return ns.db.borderSize end,
-        function(v) ns.db.borderSize = v end)
+    local descBeautify = AceGUI:Create("Label")
+    descBeautify:SetText("    |cffaaaaaa" .. L.moduleCDMBeautifyD .. "|r")
+    descBeautify:SetFullWidth(true)
+    descBeautify:SetFontObject(GameFontHighlightSmall)
+    moduleGroup:AddChild(descBeautify)
 
-    AddCheckbox(scroll, L.suppressDebuffBorder,
-        function() return ns.db.suppressDebuffBorder or false end,
-        function(v) ns.db.suppressDebuffBorder = v end)
+    local cbHighlight = AceGUI:Create("CheckBox")
+    cbHighlight:SetLabel(L.moduleHighlight)
+    cbHighlight:SetValue(mods.highlight)
+    cbHighlight:SetFullWidth(true)
+    cbHighlight:SetCallback("OnValueChanged", function(_, _, val) mods.highlight = val end)
+    moduleGroup:AddChild(cbHighlight)
+
+    local descHighlight = AceGUI:Create("Label")
+    descHighlight:SetText("    |cffaaaaaa" .. L.moduleHighlightD .. "|r")
+    descHighlight:SetFullWidth(true)
+    descHighlight:SetFontObject(GameFontHighlightSmall)
+    moduleGroup:AddChild(descHighlight)
+
+    if not mods.cdmBeautify then
+        local depHint = AceGUI:Create("Label")
+        depHint:SetText("    |cffff8800" .. L.moduleHighlightDep .. "|r")
+        depHint:SetFullWidth(true)
+        depHint:SetFontObject(GameFontHighlightSmall)
+        moduleGroup:AddChild(depHint)
+    end
+
+    local cbMonitorBars = AceGUI:Create("CheckBox")
+    cbMonitorBars:SetLabel(L.moduleMonitorBars)
+    cbMonitorBars:SetValue(mods.monitorBars)
+    cbMonitorBars:SetFullWidth(true)
+    cbMonitorBars:SetCallback("OnValueChanged", function(_, _, val) mods.monitorBars = val end)
+    moduleGroup:AddChild(cbMonitorBars)
+
+    local descMB = AceGUI:Create("Label")
+    descMB:SetText("    |cffaaaaaa" .. L.moduleMonitorBarsD .. "|r")
+    descMB:SetFullWidth(true)
+    descMB:SetFontObject(GameFontHighlightSmall)
+    moduleGroup:AddChild(descMB)
+
+    -- CDM 通用配置（仅当美化模块启用时）
+    if mods.cdmBeautify then
+        local tipGroup = AceGUI:Create("InlineGroup")
+        tipGroup:SetTitle("|cffff8800Tips|r")
+        tipGroup:SetFullWidth(true)
+        tipGroup:SetLayout("Flow")
+        scroll:AddChild(tipGroup)
+
+        local tipLabel = AceGUI:Create("Label")
+        tipLabel:SetText("|cffff8800" .. L.overviewTip .. "|r")
+        tipLabel:SetFullWidth(true)
+        tipLabel:SetFontObject(GameFontHighlightSmall)
+        tipGroup:AddChild(tipLabel)
+
+        AddHeading(scroll, L.generalSettings)
+
+        AddSlider(scroll, L.iconZoom, 0, 0.3, 0.01,
+            function() return ns.db.iconZoom end,
+            function(v) ns.db.iconZoom = v end)
+
+        AddSlider(scroll, L.borderSize, 0, 4, 1,
+            function() return ns.db.borderSize end,
+            function(v) ns.db.borderSize = v end)
+
+        AddCheckbox(scroll, L.suppressDebuffBorder,
+            function() return ns.db.suppressDebuffBorder or false end,
+            function(v) ns.db.suppressDebuffBorder = v end)
+    end
 
     -- 快捷操作
     AddHeading(scroll, "")
@@ -1032,16 +1095,26 @@ local function BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRo
 end
 
 ------------------------------------------------------
--- 选项卡定义
+-- 选项卡定义（根据模块状态动态生成）
 ------------------------------------------------------
-local TAB_LIST = {
-    { value = "general",      text = L.general },
-    { value = "essential",    text = L.essential },
-    { value = "utility",      text = L.utility },
-    { value = "buffs",        text = L.buffs },
-    { value = "highlight",    text = L.highlight },
-    { value = "monitorBars",  text = L.monitorBars },
-}
+local function GetTabList()
+    local tabs = {
+        { value = "general", text = L.general },
+    }
+    local mods = ns.db and ns.db.modules
+    if not mods or mods.cdmBeautify then
+        tabs[#tabs + 1] = { value = "essential", text = L.essential }
+        tabs[#tabs + 1] = { value = "utility",   text = L.utility }
+        tabs[#tabs + 1] = { value = "buffs",     text = L.buffs }
+    end
+    if not mods or mods.highlight then
+        tabs[#tabs + 1] = { value = "highlight", text = L.highlight }
+    end
+    if not mods or mods.monitorBars then
+        tabs[#tabs + 1] = { value = "monitorBars", text = L.monitorBars }
+    end
+    return tabs
+end
 
 local function OnTabSelected(container, _, group)
     container:ReleaseChildren()
@@ -1119,7 +1192,7 @@ local function ToggleSettings()
     frame.content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -17, 40)
 
     local tabs = AceGUI:Create("TabGroup")
-    tabs:SetTabs(TAB_LIST)
+    tabs:SetTabs(GetTabList())
     tabs:SetLayout("Fill")
     tabs:SetCallback("OnGroupSelected", OnTabSelected)
     frame:AddChild(tabs)
