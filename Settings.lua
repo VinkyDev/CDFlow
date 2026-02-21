@@ -219,27 +219,6 @@ local function BuildGeneralTab(scroll)
     descBeautify:SetFontObject(GameFontHighlightSmall)
     moduleGroup:AddChild(descBeautify)
 
-    local cbHighlight = AceGUI:Create("CheckBox")
-    cbHighlight:SetLabel(L.moduleHighlight)
-    cbHighlight:SetValue(mods.highlight)
-    cbHighlight:SetFullWidth(true)
-    cbHighlight:SetCallback("OnValueChanged", function(_, _, val) mods.highlight = val end)
-    moduleGroup:AddChild(cbHighlight)
-
-    local descHighlight = AceGUI:Create("Label")
-    descHighlight:SetText("    |cffaaaaaa" .. L.moduleHighlightD .. "|r")
-    descHighlight:SetFullWidth(true)
-    descHighlight:SetFontObject(GameFontHighlightSmall)
-    moduleGroup:AddChild(descHighlight)
-
-    if not mods.cdmBeautify then
-        local depHint = AceGUI:Create("Label")
-        depHint:SetText("    |cffff8800" .. L.moduleHighlightDep .. "|r")
-        depHint:SetFullWidth(true)
-        depHint:SetFontObject(GameFontHighlightSmall)
-        moduleGroup:AddChild(depHint)
-    end
-
     local cbMonitorBars = AceGUI:Create("CheckBox")
     cbMonitorBars:SetLabel(L.moduleMonitorBars)
     cbMonitorBars:SetValue(mods.monitorBars)
@@ -1106,8 +1085,6 @@ local function GetTabList()
         tabs[#tabs + 1] = { value = "essential", text = L.essential }
         tabs[#tabs + 1] = { value = "utility",   text = L.utility }
         tabs[#tabs + 1] = { value = "buffs",     text = L.buffs }
-    end
-    if not mods or mods.highlight then
         tabs[#tabs + 1] = { value = "highlight", text = L.highlight }
     end
     if not mods or mods.monitorBars then

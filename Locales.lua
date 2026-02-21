@@ -215,10 +215,7 @@ local S = {
     moduleManage        = { "功能模块",                                       "Modules" },
     moduleReloadHint    = { "切换模块后需 /reload 重载界面生效",              "Module changes require /reload to take effect" },
     moduleCDMBeautify   = { "冷却管理器美化",                                 "CDM Beautifier" },
-    moduleCDMBeautifyD  = { "图标样式、布局引擎、文字叠层（堆叠/键位/冷却读秒）", "Icon style, layout engine, text overlays (stacks/keybind/cooldown text)" },
-    moduleHighlight     = { "高亮特效",                                       "Highlight Effects" },
-    moduleHighlightD    = { "技能激活高亮、Buff 增益高亮",                    "Skill activation glow, buff glow" },
-    moduleHighlightDep  = { "需启用「冷却管理器美化」",                       "Requires CDM Beautifier" },
+    moduleCDMBeautifyD  = { "图标样式、布局引擎、文字叠层、高亮特效",         "Icon style, layout engine, text overlays, highlight effects" },
     moduleMonitorBars   = { "监控条",                                         "Monitor Bars" },
     moduleMonitorBarsD  = { "自定义技能充能/冷却/Buff堆叠监控条",            "Custom spell charge/cooldown/buff stack monitor bars" },
 }

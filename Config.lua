@@ -8,7 +8,6 @@ ns.defaults = {
     -- 功能模块开关
     modules = {
         cdmBeautify = true,
-        highlight   = true,
         monitorBars = true,
     },
 

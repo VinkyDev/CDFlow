@@ -145,14 +145,10 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
     local mods = ns.db.modules
 
-    -- CDM 美化模块
+    -- CDM 美化模块（含高亮特效）
     if mods.cdmBeautify then
         RegisterHooks()
         RegisterEventRegistryCallbacks()
-    end
-
-    -- 高亮特效模块（依赖 CDM 美化）
-    if mods.highlight and mods.cdmBeautify then
         SetupGlowHooks()
     end
 
