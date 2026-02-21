@@ -6,6 +6,7 @@
 ## Author: Vinky
 ## Version: 2.0.1
 ## SavedVariables: CDFlowDB, CDFlowDB_Profiles
+## SavedVariablesPerCharacter: CDFlowDB_Char
 ## IconTexture: Interface\AddOns\CDFlow\Media\logo
 ## Category: Combat
 ## Category-zhCN: 战斗

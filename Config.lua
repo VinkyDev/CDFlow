@@ -285,6 +285,10 @@ end
 -- 多配置管理
 ------------------------------------------------------
 
+------------------------------------------------------
+-- 多配置管理（配置方案 = 快照，角色配置自动保存）
+------------------------------------------------------
+
 function ns:GetProfileList()
     if not CDFlowDB_Profiles then CDFlowDB_Profiles = {} end
     return CDFlowDB_Profiles
@@ -300,7 +304,8 @@ end
 function ns:LoadProfile(name)
     local profiles = self:GetProfileList()
     if not profiles[name] then return false end
-    CDFlowDB = DeepCopy(profiles[name])
+    if not CDFlowDB_Char then CDFlowDB_Char = {} end
+    CDFlowDB_Char.config = DeepCopy(profiles[name])
     ns:LoadConfig()
     return true
 end
@@ -323,65 +328,75 @@ local function DeepMerge(dst, defaults)
     end
 end
 
--- 加载配置：合并 SavedVariables 与默认值
+-- 加载配置：每角色独立存储，首次自动从旧版账号配置迁移
 function ns:LoadConfig()
-    if not CDFlowDB then
-        CDFlowDB = DeepCopy(self.defaults)
-    else
-        DeepMerge(CDFlowDB, self.defaults)
-        if CDFlowDB.trackedBarsGrowDir ~= "TOP" and CDFlowDB.trackedBarsGrowDir ~= "BOTTOM" then
-            CDFlowDB.trackedBarsGrowDir = self.defaults.trackedBarsGrowDir
-        end
-        for _, key in ipairs({ "essential", "utility", "buffs" }) do
-            if CDFlowDB[key] then
-                CDFlowDB[key].enabled = true
-                if CDFlowDB[key].showKeybind == true and CDFlowDB[key].keybind then
-                    CDFlowDB[key].keybind.enabled = true
-                end
-                if CDFlowDB[key].stack then
-                    if type(CDFlowDB[key].stack.fontName) ~= "string" then
-                        CDFlowDB[key].stack.fontName = "默认"
-                    end
-                    if type(CDFlowDB[key].stack.textColor) ~= "table" then
-                        CDFlowDB[key].stack.textColor = { 1, 1, 1, 1 }
-                    end
-                end
-                if CDFlowDB[key].keybind then
-                    CDFlowDB[key].keybind.fontPath = nil
-                    if type(CDFlowDB[key].keybind.fontName) ~= "string" then
-                        CDFlowDB[key].keybind.fontName = "默认"
-                    end
-                    if type(CDFlowDB[key].keybind.manualBySpell) ~= "table" then
-                        CDFlowDB[key].keybind.manualBySpell = {}
-                    end
-                    if type(CDFlowDB[key].keybind.textColor) ~= "table" then
-                        CDFlowDB[key].keybind.textColor = { 1, 1, 1, 1 }
-                    end
-                end
-                if CDFlowDB[key].cooldownText then
-                    CDFlowDB[key].cooldownText.fontPath = nil
-                    if type(CDFlowDB[key].cooldownText.fontName) ~= "string" then
-                        CDFlowDB[key].cooldownText.fontName = "默认"
-                    end
-                    if type(CDFlowDB[key].cooldownText.textColor) ~= "table" then
-                        CDFlowDB[key].cooldownText.textColor = { 1, 0.82, 0, 1 }
-                    end
-                end
-                CDFlowDB[key].showKeybind = nil
-            end
-        end
-        if CDFlowDB.stack and type(CDFlowDB.stack) == "table" then
-            local old = CDFlowDB.stack
-            for _, key in ipairs({ "essential", "utility", "buffs" }) do
-                if CDFlowDB[key] then
-                    CDFlowDB[key].stack = DeepCopy(old)
-                end
-            end
-            CDFlowDB.stack = nil
+    if not CDFlowDB_Char then CDFlowDB_Char = {} end
+
+    -- 一次性迁移：旧版 CDFlowDB（账号共享）→ 角色独立配置
+    if not CDFlowDB_Char.config then
+        if CDFlowDB and next(CDFlowDB) then
+            CDFlowDB_Char.config = DeepCopy(CDFlowDB)
+        else
+            CDFlowDB_Char.config = DeepCopy(self.defaults)
         end
     end
+
+    local db = CDFlowDB_Char.config
+
+    DeepMerge(db, self.defaults)
+    if db.trackedBarsGrowDir ~= "TOP" and db.trackedBarsGrowDir ~= "BOTTOM" then
+        db.trackedBarsGrowDir = self.defaults.trackedBarsGrowDir
+    end
+    for _, key in ipairs({ "essential", "utility", "buffs" }) do
+        if db[key] then
+            db[key].enabled = true
+            if db[key].showKeybind == true and db[key].keybind then
+                db[key].keybind.enabled = true
+            end
+            if db[key].stack then
+                if type(db[key].stack.fontName) ~= "string" then
+                    db[key].stack.fontName = "默认"
+                end
+                if type(db[key].stack.textColor) ~= "table" then
+                    db[key].stack.textColor = { 1, 1, 1, 1 }
+                end
+            end
+            if db[key].keybind then
+                db[key].keybind.fontPath = nil
+                if type(db[key].keybind.fontName) ~= "string" then
+                    db[key].keybind.fontName = "默认"
+                end
+                if type(db[key].keybind.manualBySpell) ~= "table" then
+                    db[key].keybind.manualBySpell = {}
+                end
+                if type(db[key].keybind.textColor) ~= "table" then
+                    db[key].keybind.textColor = { 1, 1, 1, 1 }
+                end
+            end
+            if db[key].cooldownText then
+                db[key].cooldownText.fontPath = nil
+                if type(db[key].cooldownText.fontName) ~= "string" then
+                    db[key].cooldownText.fontName = "默认"
+                end
+                if type(db[key].cooldownText.textColor) ~= "table" then
+                    db[key].cooldownText.textColor = { 1, 0.82, 0, 1 }
+                end
+            end
+            db[key].showKeybind = nil
+        end
+    end
+    if db.stack and type(db.stack) == "table" then
+        local old = db.stack
+        for _, key in ipairs({ "essential", "utility", "buffs" }) do
+            if db[key] then
+                db[key].stack = DeepCopy(old)
+            end
+        end
+        db.stack = nil
+    end
+
     -- 监控条迁移：确保 bars 内条目字段完整
-    if CDFlowDB.monitorBars and type(CDFlowDB.monitorBars.bars) == "table" then
+    if db.monitorBars and type(db.monitorBars.bars) == "table" then
         local barDefaults = {
             enabled = true, barType = "stack", spellID = 0, spellName = "",
             unit = "player", maxStacks = 5, maxCharges = 2,
@@ -399,15 +414,15 @@ function ns:LoadConfig()
             hideFromCDM     = false,
             specs = {},
         }
-        for _, bar in ipairs(CDFlowDB.monitorBars.bars) do
+        for _, bar in ipairs(db.monitorBars.bars) do
             for k, v in pairs(barDefaults) do
                 if bar[k] == nil then bar[k] = DeepCopy(v) end
             end
         end
-        if type(CDFlowDB.monitorBars.nextID) ~= "number" then
-            CDFlowDB.monitorBars.nextID = #CDFlowDB.monitorBars.bars + 1
+        if type(db.monitorBars.nextID) ~= "number" then
+            db.monitorBars.nextID = #db.monitorBars.bars + 1
         end
     end
 
-    self.db = CDFlowDB
+    self.db = db
 end

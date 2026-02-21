@@ -265,8 +265,14 @@ local function BuildGeneralTab(scroll)
     end)
     scroll:AddChild(cdmBtn)
 
-    -- 配置管理
+    -- 配置方案
     AddHeading(scroll, L.profileManage)
+
+    local profileHint = AceGUI:Create("Label")
+    profileHint:SetText("|cffaaaaaa" .. L.profileDesc .. "|r")
+    profileHint:SetFullWidth(true)
+    profileHint:SetFontObject(GameFontHighlightSmall)
+    scroll:AddChild(profileHint)
 
     local profiles = ns:GetProfileList()
     local profileItems, profileOrder = {}, {}
@@ -278,17 +284,23 @@ local function BuildGeneralTab(scroll)
 
     local selectedProfile = profileOrder[1]
 
-    local nameBox = AceGUI:Create("EditBox")
-    nameBox:SetLabel(L.profileName)
-    nameBox:SetFullWidth(true)
-    nameBox:SetCallback("OnEnterPressed", function() end)
-    scroll:AddChild(nameBox)
+    -- 保存当前配置为方案
+    local saveGroup = AceGUI:Create("SimpleGroup")
+    saveGroup:SetFullWidth(true)
+    saveGroup:SetLayout("Flow")
+    scroll:AddChild(saveGroup)
+
+    local saveNameBox = AceGUI:Create("EditBox")
+    saveNameBox:SetLabel(L.profileSaveName)
+    saveNameBox:SetWidth(260)
+    saveNameBox:SetCallback("OnEnterPressed", function() end)
+    saveGroup:AddChild(saveNameBox)
 
     local saveBtn = AceGUI:Create("Button")
     saveBtn:SetText(L.profileSave)
-    saveBtn:SetFullWidth(true)
+    saveBtn:SetWidth(160)
     saveBtn:SetCallback("OnClick", function()
-        local name = nameBox:GetText()
+        local name = saveNameBox:GetText()
         if not name or name:match("^%s*$") then
             print("|cff00ccff[CDFlow]|r " .. L.profileNoName)
             return
@@ -299,8 +311,9 @@ local function BuildGeneralTab(scroll)
         local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
         if tabs and tabs.SelectTab then tabs:SelectTab("general") end
     end)
-    scroll:AddChild(saveBtn)
+    saveGroup:AddChild(saveBtn)
 
+    -- 加载 / 删除已有方案
     if #profileOrder > 0 then
         local profileDD = AceGUI:Create("Dropdown")
         profileDD:SetLabel(L.profileSelect)
@@ -312,10 +325,10 @@ local function BuildGeneralTab(scroll)
         end)
         scroll:AddChild(profileDD)
 
-        local loadBtnGroup = AceGUI:Create("SimpleGroup")
-        loadBtnGroup:SetFullWidth(true)
-        loadBtnGroup:SetLayout("Flow")
-        scroll:AddChild(loadBtnGroup)
+        local actionGroup = AceGUI:Create("SimpleGroup")
+        actionGroup:SetFullWidth(true)
+        actionGroup:SetLayout("Flow")
+        scroll:AddChild(actionGroup)
 
         local loadBtn = AceGUI:Create("Button")
         loadBtn:SetText(L.profileLoad)
@@ -330,19 +343,32 @@ local function BuildGeneralTab(scroll)
                 if tabs and tabs.SelectTab then tabs:SelectTab("general") end
             end
         end)
-        loadBtnGroup:AddChild(loadBtn)
+        actionGroup:AddChild(loadBtn)
 
+        local pendingDel = false
         local delBtn = AceGUI:Create("Button")
         delBtn:SetText("|cffff4444" .. L.profileDelete .. "|r")
         delBtn:SetWidth(200)
         delBtn:SetCallback("OnClick", function()
             if not selectedProfile then return end
-            ns:DeleteProfile(selectedProfile)
-            print("|cff00ccff[CDFlow]|r " .. string.format(L.profileDeleted, selectedProfile))
-            local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
-            if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+            if not pendingDel then
+                pendingDel = true
+                delBtn:SetText("|cffff4444" .. L.profileDeleteConfirm .. "|r")
+                C_Timer.After(5, function()
+                    if pendingDel then
+                        pendingDel = false
+                        delBtn:SetText("|cffff4444" .. L.profileDelete .. "|r")
+                    end
+                end)
+            else
+                pendingDel = false
+                ns:DeleteProfile(selectedProfile)
+                print("|cff00ccff[CDFlow]|r " .. string.format(L.profileDeleted, selectedProfile))
+                local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
+                if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+            end
         end)
-        loadBtnGroup:AddChild(delBtn)
+        actionGroup:AddChild(delBtn)
     else
         local noProfile = AceGUI:Create("Label")
         noProfile:SetText("|cffaaaaaa" .. L.profileNone .. "|r")
@@ -353,43 +379,47 @@ local function BuildGeneralTab(scroll)
     -- 导入/导出
     AddHeading(scroll, L.importExport)
 
-    local exportBtn = AceGUI:Create("Button")
-    exportBtn:SetText(L.exportBtn)
-    exportBtn:SetFullWidth(true)
-    scroll:AddChild(exportBtn)
-
     local exportBox = AceGUI:Create("MultiLineEditBox")
     exportBox:SetLabel(L.exportHint)
     exportBox:SetFullWidth(true)
-    exportBox:SetNumLines(4)
+    exportBox:SetNumLines(3)
     exportBox:SetText("")
     exportBox:DisableButton(true)
     scroll:AddChild(exportBox)
 
+    local exportBtn = AceGUI:Create("Button")
+    exportBtn:SetText(L.exportBtn)
+    exportBtn:SetFullWidth(true)
     exportBtn:SetCallback("OnClick", function()
         local str = ns:ExportConfig()
         exportBox:SetText(str)
         exportBox:SetFocus()
         exportBox:HighlightText()
     end)
-
-    local importNameBox = AceGUI:Create("EditBox")
-    importNameBox:SetLabel(L.importName)
-    importNameBox:SetFullWidth(true)
-    importNameBox:SetCallback("OnEnterPressed", function() end)
-    scroll:AddChild(importNameBox)
+    scroll:AddChild(exportBtn)
 
     local importBox = AceGUI:Create("MultiLineEditBox")
     importBox:SetLabel(L.importHint)
     importBox:SetFullWidth(true)
-    importBox:SetNumLines(4)
+    importBox:SetNumLines(3)
     importBox:SetText("")
     importBox:DisableButton(true)
     scroll:AddChild(importBox)
 
+    local importGroup = AceGUI:Create("SimpleGroup")
+    importGroup:SetFullWidth(true)
+    importGroup:SetLayout("Flow")
+    scroll:AddChild(importGroup)
+
+    local importNameBox = AceGUI:Create("EditBox")
+    importNameBox:SetLabel(L.importName)
+    importNameBox:SetWidth(260)
+    importNameBox:SetCallback("OnEnterPressed", function() end)
+    importGroup:AddChild(importNameBox)
+
     local importBtn = AceGUI:Create("Button")
     importBtn:SetText(L.importBtn)
-    importBtn:SetFullWidth(true)
+    importBtn:SetWidth(160)
     importBtn:SetCallback("OnClick", function()
         local name = importNameBox:GetText()
         if not name or name:match("^%s*$") then
@@ -408,7 +438,7 @@ local function BuildGeneralTab(scroll)
             print("|cff00ccff[CDFlow]|r " .. string.format(L.importFail, errMsg or "unknown"))
         end
     end)
-    scroll:AddChild(importBtn)
+    importGroup:AddChild(importBtn)
 
     -- 重置为默认配置
     AddHeading(scroll, "")
@@ -429,8 +459,8 @@ local function BuildGeneralTab(scroll)
             end)
         else
             pendingConfirm = false
-            CDFlowDB = ns.DeepCopy(ns.defaults)
-            ns.db = CDFlowDB
+            CDFlowDB_Char.config = ns.DeepCopy(ns.defaults)
+            ns:LoadConfig()
             Layout:RefreshAll()
             resetBtn:SetText(L.resetDefaults)
             if settingsFrame then

@@ -234,7 +234,7 @@ initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(_, _, addonName)
     if addonName ~= "CDFlow" then return end
 
-    -- 加载配置
+    -- 加载配置（角色独立存储，自动保存）
     ns:LoadConfig()
 
     -- 注册 Hooks
