@@ -542,10 +542,9 @@ local function ShowCatalog(rebuildTab)
         if not spellID or spellID <= 0 then return end
         local spellName = C_Spell.GetSpellName(spellID) or ""
         local chargeInfo = C_Spell.GetSpellCharges(spellID)
-        local barType = chargeInfo and "charge" or "stack"
         local id = cfg.nextID or (#cfg.bars + 1)
         cfg.nextID = id + 1
-        local bar = NewBarDefaults(id, barType, spellID, spellName)
+        local bar = NewBarDefaults(id, "charge", spellID, spellName)
         if chargeInfo and chargeInfo.maxCharges then
             if not issecretvalue or not issecretvalue(chargeInfo.maxCharges) then
                 bar.maxCharges = chargeInfo.maxCharges

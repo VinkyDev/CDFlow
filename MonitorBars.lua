@@ -282,6 +282,19 @@ local function GetExactCount(barFrame, maxVal)
     return count
 end
 
+local function GetOrCreateShadowCooldown(barFrame)
+    if barFrame._shadowCooldown then return barFrame._shadowCooldown end
+    local cd = CreateFrame("Cooldown", nil, barFrame, "CooldownFrameTemplate")
+    cd:SetAllPoints(barFrame)
+    cd:SetDrawSwipe(false)
+    cd:SetDrawEdge(false)
+    cd:SetDrawBling(false)
+    cd:SetHideCountdownNumbers(true)
+    cd:SetAlpha(0)
+    barFrame._shadowCooldown = cd
+    return cd
+end
+
 local function CreateBorder(parent, cfg)
     local size = cfg.borderSize or 1
     if size <= 0 then return end
@@ -425,6 +438,8 @@ function MB:CreateBarFrame(barCfg)
     f._lastKnownActive = false
     f._lastKnownStacks = 0
     f._nilCount = 0
+    f._isChargeSpell = nil
+    f._shadowCooldown = nil
 
     activeFrames[id] = f
     return f
@@ -579,6 +594,83 @@ UpdateStackBar = function(barFrame)
     end
 end
 
+local function UpdateRegularCooldownBar(barFrame)
+    local cfg = barFrame._cfg
+    local spellID = cfg.spellID
+
+    local isOnGCD = false
+    pcall(function()
+        local cdInfo = C_Spell.GetSpellCooldown(spellID)
+        if cdInfo and cdInfo.isOnGCD == true then isOnGCD = true end
+    end)
+
+    local shadowCD = GetOrCreateShadowCooldown(barFrame)
+    local durObj = nil
+    if isOnGCD then
+        shadowCD:SetCooldown(0, 0)
+    else
+        pcall(function() durObj = C_Spell.GetSpellCooldownDuration(spellID) end)
+        if durObj then
+            shadowCD:Clear()
+            pcall(function() shadowCD:SetCooldownFromDurationObject(durObj, true) end)
+        else
+            shadowCD:SetCooldown(0, 0)
+        end
+    end
+
+    local isOnCooldown = shadowCD:IsShown()
+
+    local segs = barFrame._segments
+    if not segs or #segs ~= 1 then
+        CreateSegments(barFrame, 1, cfg)
+        segs = barFrame._segments
+    end
+    if not segs or #segs < 1 then return end
+
+    local seg = segs[1]
+    local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
+    local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.ElapsedTime or 0
+
+    if isOnCooldown and not isOnGCD then
+        if barFrame._needsDurationRefresh and durObj then
+            seg:SetMinMaxValues(0, 1)
+            if seg.SetTimerDuration then
+                seg:SetTimerDuration(durObj, interpolation, direction)
+                if seg.SetToTargetValue then
+                    seg:SetToTargetValue()
+                end
+            else
+                seg:SetMinMaxValues(0, 1)
+                seg:SetValue(0)
+            end
+            barFrame._needsDurationRefresh = false
+        end
+    else
+        seg:SetMinMaxValues(0, 1)
+        seg:SetValue(1)
+    end
+
+    ApplySegmentColors(barFrame, isOnCooldown and 0 or 1)
+
+    if cfg.showText ~= false and barFrame._text then
+        if isOnCooldown and not isOnGCD and durObj then
+            local remaining = durObj:GetRemainingDuration()
+            local ok, result = pcall(function()
+                local num = tonumber(remaining)
+                if num then return string.format("%.1f", num) end
+                return remaining
+            end)
+            if ok and result then
+                barFrame._text:SetText(result)
+            else
+                barFrame._text:SetText(remaining or "")
+            end
+        else
+            barFrame._text:SetText("")
+        end
+    end
+end
+
 local function UpdateChargeBar(barFrame)
     local cfg = barFrame._cfg
     if not cfg or cfg.barType ~= "charge" then return end
@@ -590,7 +682,13 @@ local function UpdateChargeBar(barFrame)
     if barFrame._needsChargeRefresh then
         barFrame._cachedChargeInfo = C_Spell.GetSpellCharges(spellID)
         barFrame._needsChargeRefresh = false
+        barFrame._isChargeSpell = barFrame._cachedChargeInfo ~= nil
         chargeJustRefreshed = true
+    end
+
+    if barFrame._isChargeSpell == false then
+        UpdateRegularCooldownBar(barFrame)
+        return
     end
 
     local chargeInfo = barFrame._cachedChargeInfo
@@ -768,7 +866,7 @@ function MB:InitAllBars()
             self:ApplyStyle(f)
 
             local count = (barCfg.barType == "charge")
-                and (barCfg.maxCharges > 0 and barCfg.maxCharges or 2)
+                and (barCfg.maxCharges > 0 and barCfg.maxCharges or 1)
                 or barCfg.maxStacks
             C_Timer.After(0, function()
                 if f._segContainer and f._segContainer:GetWidth() > 0 then
@@ -816,7 +914,9 @@ function MB:OnCombatLeave()
     self:ScanCDMViewers()
     for _, f in pairs(activeFrames) do
         f._needsChargeRefresh = true
+        f._needsDurationRefresh = true
         f._nilCount = 0
+        f._isChargeSpell = nil
         if f._cfg and f._cfg.barType == "charge" and f._cfg.spellID > 0 then
             local chargeInfo = C_Spell.GetSpellCharges(f._cfg.spellID)
             if chargeInfo and chargeInfo.maxCharges then
