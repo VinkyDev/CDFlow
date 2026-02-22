@@ -227,6 +227,7 @@ local S = {
     mbSpecCurrent       = { "仅当前专精",       "Current Spec Only" },
     mbSpec              = { "专精%d",           "Spec %d" },
     mbAdded             = { "已添加: %s",       "Added: %s" },
+    mbSegmentGap        = { "分段间距",         "Segment Gap" },
 
     -- 功能模块
     moduleManage        = { "功能模块",                                       "Modules" },

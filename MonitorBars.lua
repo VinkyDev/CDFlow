@@ -332,7 +332,8 @@ local function CreateSegments(barFrame, count, cfg)
     local container = barFrame._segContainer
     local totalW = container:GetWidth()
     local totalH = container:GetHeight()
-    local segW = (totalW - (count - 1) * SEGMENT_GAP) / count
+    local gap = cfg.segmentGap ~= nil and cfg.segmentGap or SEGMENT_GAP
+    local segW = (totalW - (count - 1) * gap) / count
     local barColor = cfg.barColor or { 0.2, 0.8, 0.2, 1 }
     local bgColor = cfg.bgColor or { 0.1, 0.1, 0.1, 0.6 }
     local texPath = BAR_TEXTURE
@@ -341,7 +342,7 @@ local function CreateSegments(barFrame, count, cfg)
     end
 
     for i = 1, count do
-        local xOff = (i - 1) * (segW + SEGMENT_GAP)
+        local xOff = (i - 1) * (segW + gap)
 
         local bg = container:CreateTexture(nil, "BACKGROUND")
         bg:ClearAllPoints()

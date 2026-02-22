@@ -76,6 +76,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         barTexture = "Solid",
         colorThreshold  = 0,
         thresholdColor  = { 1.0, 0.5, 0.0, 1 },
+        segmentGap      = 1,
         hideFromCDM     = false,
         specs      = { GetSpecialization() or 1 },
     }
@@ -368,6 +369,17 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         MB:RebuildAllBars()
     end)
     styleGroup:AddChild(borderSlider)
+
+    local gapSlider = AceGUI:Create("Slider")
+    gapSlider:SetLabel(L.mbSegmentGap)
+    gapSlider:SetSliderValues(0, 10, 1)
+    gapSlider:SetValue(barCfg.segmentGap ~= nil and barCfg.segmentGap or 1)
+    gapSlider:SetFullWidth(true)
+    gapSlider:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.segmentGap = math.floor(val)
+        MB:RebuildAllBars()
+    end)
+    styleGroup:AddChild(gapSlider)
 
     local iconCB = AceGUI:Create("CheckBox")
     iconCB:SetLabel(L.mbShowIcon)
