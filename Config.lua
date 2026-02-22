@@ -1,8 +1,11 @@
 local _, ns = ...
 
 ------------------------------------------------------
--- 配置模块：默认值定义 + SavedVariables 管理
+-- 配置模块：AceDB-3.0 配置管理 + 导入导出
 ------------------------------------------------------
+
+local AceDB3 = LibStub("AceDB-3.0")
+local LibDualSpec = LibStub("LibDualSpec-1.0", true)
 
 ns.defaults = {
     -- 功能模块开关
@@ -12,10 +15,10 @@ ns.defaults = {
     },
 
     -- 全局样式
-    iconZoom    = 0.08,     -- 图标纹理裁剪量
-    borderSize  = 1,        -- 边框像素粗细
-    suppressDebuffBorder = true, -- 屏蔽 debuff 红色边框
-    trackedBarsGrowDir = "BOTTOM", -- 追踪状态栏增长方向：BOTTOM/TOP
+    iconZoom    = 0.08,
+    borderSize  = 1,
+    suppressDebuffBorder = true,
+    trackedBarsGrowDir = "BOTTOM",
 
     -- 核心技能查看器
     essential = {
@@ -146,22 +149,22 @@ ns.defaults = {
 
     -- 高亮特效（技能激活）
     highlight = {
-        style     = "PIXEL",        -- DEFAULT / PIXEL / AUTOCAST / PROC / BUTTON / NONE
-        lines     = 8,              -- 像素发光：线条数量
-        frequency = 0.2,             -- 动画速度
-        thickness = 2,              -- 像素发光：线条粗细
-        scale     = 1,              -- 自动施法：缩放
+        style     = "PIXEL",
+        lines     = 8,
+        frequency = 0.2,
+        thickness = 2,
+        scale     = 1,
     },
 
-    -- Buff 增益高亮（所有 buff 显示时高亮）
+    -- Buff 增益高亮
     buffGlow = {
         enabled     = false,
-        style       = "PIXEL",      -- 同 highlight
+        style       = "PIXEL",
         lines       = 8,
         frequency   = 0.2,
         thickness   = 2,
         scale       = 1,
-        spellFilter = {},           -- 空 = 全部高亮；非空 = 仅高亮列表中的技能ID
+        spellFilter = {},
     },
 
     -- 监控条
@@ -182,7 +185,7 @@ end
 ns.DeepCopy = DeepCopy
 
 ------------------------------------------------------
--- 序列化 / 反序列化（纯 Lua，无外部依赖）
+-- 序列化 / 反序列化（导入导出用）
 ------------------------------------------------------
 
 local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -264,8 +267,31 @@ local function SerializeValue(v)
     return "nil"
 end
 
+------------------------------------------------------
+-- 导出 / 导入
+------------------------------------------------------
+
+local function DeepMergeForExport(dst, defaults)
+    for k, v in pairs(defaults) do
+        if dst[k] == nil then
+            dst[k] = DeepCopy(v)
+        elseif type(v) == "table" and type(dst[k]) == "table" then
+            DeepMergeForExport(dst[k], v)
+        end
+    end
+end
+
 function ns:ExportConfig()
-    local str = SerializeValue(ns.db)
+    local snapshot = {}
+    for k, v in pairs(ns.db) do
+        if type(v) == "table" then
+            snapshot[k] = DeepCopy(v)
+        else
+            snapshot[k] = v
+        end
+    end
+    DeepMergeForExport(snapshot, ns.defaults)
+    local str = SerializeValue(snapshot)
     return "!CDF1!" .. Base64Encode(str)
 end
 
@@ -282,153 +308,152 @@ function ns:ImportConfig(encoded, profileName)
     setfenv(fn, {})
     local ok, data = pcall(fn)
     if not ok or type(data) ~= "table" then return false, "eval error" end
-    local profiles = self:GetProfileList()
-    profiles[profileName] = data
+
+    ns.acedb.sv.profiles[profileName] = data
     return true
 end
 
 ------------------------------------------------------
--- 多配置管理
+-- AceDB 初始化 + 旧数据迁移
 ------------------------------------------------------
 
-------------------------------------------------------
--- 多配置管理（配置方案 = 快照，角色配置自动保存）
-------------------------------------------------------
-
-function ns:GetProfileList()
-    if not CDFlowDB_Profiles then CDFlowDB_Profiles = {} end
-    return CDFlowDB_Profiles
-end
-
-function ns:SaveProfile(name)
-    if not name or name == "" then return false end
-    local profiles = self:GetProfileList()
-    profiles[name] = DeepCopy(ns.db)
-    return true
-end
-
-function ns:LoadProfile(name)
-    local profiles = self:GetProfileList()
-    if not profiles[name] then return false end
-    if not CDFlowDB_Char then CDFlowDB_Char = {} end
-    CDFlowDB_Char.config = DeepCopy(profiles[name])
-    ns:LoadConfig()
-    return true
-end
-
-function ns:DeleteProfile(name)
-    local profiles = self:GetProfileList()
-    if not profiles[name] then return false end
-    profiles[name] = nil
-    return true
-end
-
--- 用默认值填充缺失字段（不覆盖已有值）
-local function DeepMerge(dst, defaults)
-    for k, v in pairs(defaults) do
-        if dst[k] == nil then
-            dst[k] = DeepCopy(v)
-        elseif type(v) == "table" and type(dst[k]) == "table" then
-            DeepMerge(dst[k], v)
+local function MigrateOldBarFields(db)
+    if not db.monitorBars or type(db.monitorBars.bars) ~= "table" then return end
+    local barDefaults = {
+        enabled = true, barType = "stack", spellID = 0, spellName = "",
+        unit = "player", maxStacks = 5, maxCharges = 2,
+        width = 200, height = 20, posX = 0, posY = 0,
+        barColor    = { 0.2, 0.8, 0.2, 1 },
+        bgColor     = { 0.1, 0.1, 0.1, 0.6 },
+        borderColor = { 0, 0, 0, 1 },
+        borderSize  = 1,
+        showIcon = true, showText = true,
+        textAlign = "RIGHT", textOffsetX = -4, textOffsetY = 0,
+        fontName = "", fontSize = 12, outline = "OUTLINE",
+        barTexture = "Solid",
+        colorThreshold  = 0,
+        thresholdColor  = { 1.0, 0.5, 0.0, 1 },
+        hideFromCDM     = false,
+        specs = {},
+    }
+    for _, bar in ipairs(db.monitorBars.bars) do
+        for k, v in pairs(barDefaults) do
+            if bar[k] == nil then bar[k] = DeepCopy(v) end
         end
     end
+    if type(db.monitorBars.nextID) ~= "number" then
+        db.monitorBars.nextID = #db.monitorBars.bars + 1
+    end
 end
 
--- 加载配置：每角色独立存储，首次自动从旧版账号配置迁移
-function ns:LoadConfig()
-    if not CDFlowDB_Char then CDFlowDB_Char = {} end
-
-    -- 一次性迁移：旧版 CDFlowDB（账号共享）→ 角色独立配置
-    if not CDFlowDB_Char.config then
-        if CDFlowDB and next(CDFlowDB) then
-            CDFlowDB_Char.config = DeepCopy(CDFlowDB)
-        else
-            CDFlowDB_Char.config = DeepCopy(self.defaults)
-        end
+local function MigrateOldViewerFields(cfg)
+    if not cfg then return end
+    cfg.enabled = true
+    if cfg.showKeybind == true and cfg.keybind then
+        cfg.keybind.enabled = true
     end
-
-    local db = CDFlowDB_Char.config
-
-    DeepMerge(db, self.defaults)
-    if db.trackedBarsGrowDir ~= "TOP" and db.trackedBarsGrowDir ~= "BOTTOM" then
-        db.trackedBarsGrowDir = self.defaults.trackedBarsGrowDir
+    cfg.showKeybind = nil
+    if cfg.stack then
+        if type(cfg.stack.fontName) ~= "string" then cfg.stack.fontName = "默认" end
+        if type(cfg.stack.textColor) ~= "table" then cfg.stack.textColor = { 1, 1, 1, 1 } end
     end
+    if cfg.keybind then
+        cfg.keybind.fontPath = nil
+        if type(cfg.keybind.fontName) ~= "string" then cfg.keybind.fontName = "默认" end
+        if type(cfg.keybind.manualBySpell) ~= "table" then cfg.keybind.manualBySpell = {} end
+        if type(cfg.keybind.textColor) ~= "table" then cfg.keybind.textColor = { 1, 1, 1, 1 } end
+    end
+    if cfg.cooldownText then
+        cfg.cooldownText.fontPath = nil
+        if type(cfg.cooldownText.fontName) ~= "string" then cfg.cooldownText.fontName = "默认" end
+        if type(cfg.cooldownText.textColor) ~= "table" then cfg.cooldownText.textColor = { 1, 0.82, 0, 1 } end
+    end
+end
+
+local function MigrateOldData(profileData)
     for _, key in ipairs({ "essential", "utility", "buffs" }) do
-        if db[key] then
-            db[key].enabled = true
-            if db[key].showKeybind == true and db[key].keybind then
-                db[key].keybind.enabled = true
-            end
-            if db[key].stack then
-                if type(db[key].stack.fontName) ~= "string" then
-                    db[key].stack.fontName = "默认"
-                end
-                if type(db[key].stack.textColor) ~= "table" then
-                    db[key].stack.textColor = { 1, 1, 1, 1 }
-                end
-            end
-            if db[key].keybind then
-                db[key].keybind.fontPath = nil
-                if type(db[key].keybind.fontName) ~= "string" then
-                    db[key].keybind.fontName = "默认"
-                end
-                if type(db[key].keybind.manualBySpell) ~= "table" then
-                    db[key].keybind.manualBySpell = {}
-                end
-                if type(db[key].keybind.textColor) ~= "table" then
-                    db[key].keybind.textColor = { 1, 1, 1, 1 }
-                end
-            end
-            if db[key].cooldownText then
-                db[key].cooldownText.fontPath = nil
-                if type(db[key].cooldownText.fontName) ~= "string" then
-                    db[key].cooldownText.fontName = "默认"
-                end
-                if type(db[key].cooldownText.textColor) ~= "table" then
-                    db[key].cooldownText.textColor = { 1, 0.82, 0, 1 }
-                end
-            end
-            db[key].showKeybind = nil
-        end
+        MigrateOldViewerFields(profileData[key])
     end
-    if db.stack and type(db.stack) == "table" then
-        local old = db.stack
+    if profileData.stack and type(profileData.stack) == "table" then
+        local old = profileData.stack
         for _, key in ipairs({ "essential", "utility", "buffs" }) do
-            if db[key] then
-                db[key].stack = DeepCopy(old)
+            if profileData[key] then
+                profileData[key].stack = DeepCopy(old)
             end
         end
-        db.stack = nil
+        profileData.stack = nil
+    end
+    if profileData.trackedBarsGrowDir ~= "TOP" and profileData.trackedBarsGrowDir ~= "BOTTOM" then
+        profileData.trackedBarsGrowDir = ns.defaults.trackedBarsGrowDir
+    end
+    MigrateOldBarFields(profileData)
+end
+
+function ns:InitDB()
+    local charKey = UnitName("player") .. " - " .. GetRealmName()
+
+    -- Detect old-format data before AceDB overwrites CDFlowDB
+    local oldCharConfig = CDFlowDB_Char and CDFlowDB_Char.config and DeepCopy(CDFlowDB_Char.config)
+    local oldProfiles = CDFlowDB_Profiles and next(CDFlowDB_Profiles) and DeepCopy(CDFlowDB_Profiles)
+    local oldAccountConfig = nil
+    if CDFlowDB and CDFlowDB.essential and not CDFlowDB.profiles then
+        oldAccountConfig = DeepCopy(CDFlowDB)
+        wipe(CDFlowDB)
     end
 
-    -- 监控条迁移：确保 bars 内条目字段完整
-    if db.monitorBars and type(db.monitorBars.bars) == "table" then
-        local barDefaults = {
-            enabled = true, barType = "stack", spellID = 0, spellName = "",
-            unit = "player", maxStacks = 5, maxCharges = 2,
-            width = 200, height = 20, posX = 0, posY = 0,
-            barColor    = { 0.2, 0.8, 0.2, 1 },
-            bgColor     = { 0.1, 0.1, 0.1, 0.6 },
-            borderColor = { 0, 0, 0, 1 },
-            borderSize  = 1,
-            showIcon = true, showText = true,
-            textAlign = "RIGHT", textOffsetX = -4, textOffsetY = 0,
-            fontName = "", fontSize = 12, outline = "OUTLINE",
-            barTexture = "Solid",
-            colorThreshold  = 0,
-            thresholdColor  = { 1.0, 0.5, 0.0, 1 },
-            hideFromCDM     = false,
-            specs = {},
-        }
-        for _, bar in ipairs(db.monitorBars.bars) do
-            for k, v in pairs(barDefaults) do
-                if bar[k] == nil then bar[k] = DeepCopy(v) end
+    local db = AceDB3:New("CDFlowDB", { profile = ns.defaults }, charKey)
+
+    if LibDualSpec then
+        LibDualSpec:EnhanceDatabase(db, "CDFlow")
+    end
+
+    ns.acedb = db
+
+    -- Migrate old per-character config into current profile
+    local migrated = false
+    if oldCharConfig then
+        MigrateOldData(oldCharConfig)
+        for k, v in pairs(oldCharConfig) do
+            if type(v) == "table" then
+                db.profile[k] = DeepCopy(v)
+            else
+                db.profile[k] = v
             end
         end
-        if type(db.monitorBars.nextID) ~= "number" then
-            db.monitorBars.nextID = #db.monitorBars.bars + 1
+        migrated = true
+    elseif oldAccountConfig then
+        MigrateOldData(oldAccountConfig)
+        for k, v in pairs(oldAccountConfig) do
+            if type(v) == "table" then
+                db.profile[k] = DeepCopy(v)
+            else
+                db.profile[k] = v
+            end
+        end
+        migrated = true
+    end
+
+    -- Migrate old named profiles into AceDB
+    if oldProfiles then
+        for name, cfg in pairs(oldProfiles) do
+            MigrateOldData(cfg)
+            db.sv.profiles[name] = cfg
         end
     end
 
-    self.db = db
+    -- Clear old SavedVariables after migration
+    if migrated or oldProfiles then
+        CDFlowDB_Char = nil
+        CDFlowDB_Profiles = nil
+    end
+
+    ns.db = db.profile
+end
+
+------------------------------------------------------
+-- Profile change handler (called by Core.lua callbacks)
+------------------------------------------------------
+
+function ns:OnProfileChanged()
+    ns.db = ns.acedb.profile
 end

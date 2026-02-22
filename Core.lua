@@ -141,7 +141,22 @@ initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(_, _, addonName)
     if addonName ~= "CDFlow" then return end
 
-    ns:LoadConfig()
+    ns:InitDB()
+
+    -- AceDB profile change callbacks
+    local function OnProfileChanged()
+        ns:OnProfileChanged()
+        if ns.db.modules.cdmBeautify then
+            Layout:RefreshAll()
+        end
+        if ns.db.modules.monitorBars and MB then
+            MB:RebuildAllBars()
+        end
+    end
+
+    ns.acedb.RegisterCallback(ns, "OnProfileChanged", function() OnProfileChanged() end)
+    ns.acedb.RegisterCallback(ns, "OnProfileCopied", function() OnProfileChanged() end)
+    ns.acedb.RegisterCallback(ns, "OnProfileReset", function() OnProfileChanged() end)
 
     local mods = ns.db.modules
 

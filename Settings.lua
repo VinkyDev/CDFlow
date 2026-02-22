@@ -306,93 +306,172 @@ local function BuildGeneralTab(scroll)
         end)
     end)
     scroll:AddChild(cdmBtn)
+end
 
-    -- 配置方案
-    AddHeading(scroll, L.profileManage)
+------------------------------------------------------
+-- 构建「配置文件」选项卡
+------------------------------------------------------
 
-    local profileHint = AceGUI:Create("Label")
-    profileHint:SetText("|cffaaaaaa" .. L.profileDesc .. "|r")
-    profileHint:SetFullWidth(true)
-    profileHint:SetFontObject(GameFontHighlightSmall)
-    scroll:AddChild(profileHint)
-
-    local profiles = ns:GetProfileList()
-    local profileItems, profileOrder = {}, {}
-    for name in pairs(profiles) do
-        profileItems[name] = name
-        profileOrder[#profileOrder + 1] = name
-    end
-    table.sort(profileOrder)
-
-    local selectedProfile = profileOrder[1]
-
-    -- 保存当前配置为方案
-    local saveGroup = AceGUI:Create("SimpleGroup")
-    saveGroup:SetFullWidth(true)
-    saveGroup:SetLayout("Flow")
-    scroll:AddChild(saveGroup)
-
-    local saveNameBox = AceGUI:Create("EditBox")
-    saveNameBox:SetLabel(L.profileSaveName)
-    saveNameBox:SetWidth(260)
-    saveNameBox:SetCallback("OnEnterPressed", function() end)
-    saveGroup:AddChild(saveNameBox)
-
-    local saveBtn = AceGUI:Create("Button")
-    saveBtn:SetText(L.profileSave)
-    saveBtn:SetWidth(160)
-    saveBtn:SetCallback("OnClick", function()
-        local name = saveNameBox:GetText()
-        if not name or name:match("^%s*$") then
-            print("|cff00ccff[CDFlow]|r " .. L.profileNoName)
-            return
+local function GetProfileList(db, excludeCurrent)
+    local profiles = {}
+    local order = {}
+    local tmpProfiles = {}
+    local current = db:GetCurrentProfile()
+    for _, name in pairs(db:GetProfiles(tmpProfiles)) do
+        if not (excludeCurrent and name == current) then
+            profiles[name] = name
+            order[#order + 1] = name
         end
-        name = name:match("^%s*(.-)%s*$")
-        ns:SaveProfile(name)
-        print("|cff00ccff[CDFlow]|r " .. string.format(L.profileSaved, name))
+    end
+    table.sort(order)
+    return profiles, order
+end
+
+local function GetSpecNames()
+    local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+    local names = {}
+    if isRetail then
+        local _, classId = UnitClassBase("player")
+        local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classId)
+        for i = 1, numSpecs do
+            local _, name = GetSpecializationInfoForClassID(classId, i)
+            names[i] = name
+        end
+    else
+        names[1] = TALENT_SPEC_PRIMARY or "Spec 1"
+        names[2] = TALENT_SPEC_SECONDARY or "Spec 2"
+    end
+    return names
+end
+
+local function BuildProfilesTab(scroll)
+    local db = ns.acedb
+    local LibDualSpec = LibStub("LibDualSpec-1.0", true)
+
+    local function RefreshTab()
         local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
-        if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+        if tabs and tabs.SelectTab then tabs:SelectTab("profiles") end
+    end
+
+    -- Description
+    local desc = AceGUI:Create("Label")
+    desc:SetText("|cffaaaaaa" .. L.profileDesc .. "|r")
+    desc:SetFullWidth(true)
+    desc:SetFontObject(GameFontHighlight)
+    scroll:AddChild(desc)
+
+    -- Current profile display
+    AddHeading(scroll, "")
+
+    local currentLabel = AceGUI:Create("Label")
+    currentLabel:SetText(L.profileCurrent .. "  " .. NORMAL_FONT_COLOR_CODE .. db:GetCurrentProfile() .. FONT_COLOR_CODE_CLOSE)
+    currentLabel:SetFullWidth(true)
+    currentLabel:SetFontObject(GameFontNormalLarge)
+    scroll:AddChild(currentLabel)
+
+    -- New profile
+    AddHeading(scroll, L.profileNew)
+
+    local newDesc = AceGUI:Create("Label")
+    newDesc:SetText("|cffaaaaaa" .. L.profileNewDesc .. "|r")
+    newDesc:SetFullWidth(true)
+    newDesc:SetFontObject(GameFontHighlightSmall)
+    scroll:AddChild(newDesc)
+
+    local newBox = AceGUI:Create("EditBox")
+    newBox:SetLabel(L.profileNew)
+    newBox:SetFullWidth(true)
+    newBox:SetCallback("OnEnterPressed", function(_, _, val)
+        val = val and val:match("^%s*(.-)%s*$")
+        if not val or val == "" then return end
+        if LibDualSpec and db.IsDualSpecEnabled and db:IsDualSpecEnabled() then
+            db:SetDualSpecProfile(val)
+        else
+            db:SetProfile(val)
+        end
+        print("|cff00ccff[CDFlow]|r " .. format(L.profileCreated, val))
+        RefreshTab()
     end)
-    saveGroup:AddChild(saveBtn)
+    scroll:AddChild(newBox)
 
-    -- 加载 / 删除已有方案
-    if #profileOrder > 0 then
-        local profileDD = AceGUI:Create("Dropdown")
-        profileDD:SetLabel(L.profileSelect)
-        profileDD:SetList(profileItems, profileOrder)
-        profileDD:SetValue(selectedProfile)
-        profileDD:SetFullWidth(true)
-        profileDD:SetCallback("OnValueChanged", function(_, _, val)
-            selectedProfile = val
+    -- Choose existing profile
+    AddHeading(scroll, L.profileChoose)
+
+    local chooseDesc = AceGUI:Create("Label")
+    chooseDesc:SetText("|cffaaaaaa" .. L.profileChooseDesc .. "|r")
+    chooseDesc:SetFullWidth(true)
+    chooseDesc:SetFontObject(GameFontHighlightSmall)
+    scroll:AddChild(chooseDesc)
+
+    local profileItems, profileOrder = GetProfileList(db)
+    local isDualSpecActive = LibDualSpec and db.IsDualSpecEnabled and db:IsDualSpecEnabled()
+
+    local chooseDD = AceGUI:Create("Dropdown")
+    chooseDD:SetLabel(L.profileChoose)
+    chooseDD:SetList(profileItems, profileOrder)
+    chooseDD:SetValue(db:GetCurrentProfile())
+    chooseDD:SetFullWidth(true)
+    if isDualSpecActive then
+        chooseDD:SetDisabled(true)
+    end
+    chooseDD:SetCallback("OnValueChanged", function(_, _, val)
+        db:SetProfile(val)
+        print("|cff00ccff[CDFlow]|r " .. format(L.profileLoaded, val))
+        RefreshTab()
+    end)
+    scroll:AddChild(chooseDD)
+
+    -- Copy from
+    local copyItems, copyOrder = GetProfileList(db, true)
+    if next(copyItems) then
+        AddHeading(scroll, L.profileCopyFrom)
+
+        local copyDesc = AceGUI:Create("Label")
+        copyDesc:SetText("|cffaaaaaa" .. L.profileCopyDesc .. "|r")
+        copyDesc:SetFullWidth(true)
+        copyDesc:SetFontObject(GameFontHighlightSmall)
+        scroll:AddChild(copyDesc)
+
+        local copyDD = AceGUI:Create("Dropdown")
+        copyDD:SetLabel(L.profileCopyFrom)
+        copyDD:SetList(copyItems, copyOrder)
+        copyDD:SetFullWidth(true)
+        copyDD:SetCallback("OnValueChanged", function(_, _, val)
+            db:CopyProfile(val)
+            print("|cff00ccff[CDFlow]|r " .. format(L.profileCopied, val))
+            RefreshTab()
         end)
-        scroll:AddChild(profileDD)
+        scroll:AddChild(copyDD)
+    end
 
-        local actionGroup = AceGUI:Create("SimpleGroup")
-        actionGroup:SetFullWidth(true)
-        actionGroup:SetLayout("Flow")
-        scroll:AddChild(actionGroup)
+    -- Delete
+    local delItems, delOrder = GetProfileList(db, true)
+    if next(delItems) then
+        AddHeading(scroll, L.profileDelete)
 
-        local loadBtn = AceGUI:Create("Button")
-        loadBtn:SetText(L.profileLoad)
-        loadBtn:SetWidth(200)
-        loadBtn:SetCallback("OnClick", function()
-            if not selectedProfile then return end
-            if ns:LoadProfile(selectedProfile) then
-                print("|cff00ccff[CDFlow]|r " .. string.format(L.profileLoaded, selectedProfile))
-                Layout:RefreshAll()
-                if ns.MonitorBars then ns.MonitorBars:RebuildAllBars() end
-                local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
-                if tabs and tabs.SelectTab then tabs:SelectTab("general") end
-            end
-        end)
-        actionGroup:AddChild(loadBtn)
+        local delDesc = AceGUI:Create("Label")
+        delDesc:SetText("|cffaaaaaa" .. L.profileDeleteDesc .. "|r")
+        delDesc:SetFullWidth(true)
+        delDesc:SetFontObject(GameFontHighlightSmall)
+        scroll:AddChild(delDesc)
+
+        local delDD = AceGUI:Create("Dropdown")
+        delDD:SetLabel(L.profileDelete)
+        delDD:SetList(delItems, delOrder)
+        delDD:SetFullWidth(true)
+        scroll:AddChild(delDD)
 
         local pendingDel = false
         local delBtn = AceGUI:Create("Button")
         delBtn:SetText("|cffff4444" .. L.profileDelete .. "|r")
-        delBtn:SetWidth(200)
+        delBtn:SetFullWidth(true)
         delBtn:SetCallback("OnClick", function()
-            if not selectedProfile then return end
+            local selected = delDD:GetValue()
+            if not selected then return end
+            if selected == db:GetCurrentProfile() then
+                print("|cff00ccff[CDFlow]|r " .. L.profileCantDeleteCurrent)
+                return
+            end
             if not pendingDel then
                 pendingDel = true
                 delBtn:SetText("|cffff4444" .. L.profileDeleteConfirm .. "|r")
@@ -404,21 +483,71 @@ local function BuildGeneralTab(scroll)
                 end)
             else
                 pendingDel = false
-                ns:DeleteProfile(selectedProfile)
-                print("|cff00ccff[CDFlow]|r " .. string.format(L.profileDeleted, selectedProfile))
-                local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
-                if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+                db:DeleteProfile(selected)
+                print("|cff00ccff[CDFlow]|r " .. format(L.profileDeleted, selected))
+                RefreshTab()
             end
         end)
-        actionGroup:AddChild(delBtn)
-    else
-        local noProfile = AceGUI:Create("Label")
-        noProfile:SetText("|cffaaaaaa" .. L.profileNone .. "|r")
-        noProfile:SetFullWidth(true)
-        scroll:AddChild(noProfile)
+        scroll:AddChild(delBtn)
     end
 
-    -- 导入/导出
+    -- Spec profiles (LibDualSpec)
+    if LibDualSpec and db.IsDualSpecEnabled then
+        AddHeading(scroll, L.specProfileEnable)
+
+        local specDesc = AceGUI:Create("Label")
+        specDesc:SetText("|cffaaaaaa" .. L.specProfileDesc .. "|r")
+        specDesc:SetFullWidth(true)
+        specDesc:SetFontObject(GameFontHighlightSmall)
+        scroll:AddChild(specDesc)
+
+        local specToggle = AceGUI:Create("CheckBox")
+        specToggle:SetLabel("|cffffd200" .. L.specProfileEnable .. "|r")
+        specToggle:SetValue(db:IsDualSpecEnabled())
+        specToggle:SetFullWidth(true)
+        scroll:AddChild(specToggle)
+
+        local specGroup = AceGUI:Create("InlineGroup")
+        specGroup:SetFullWidth(true)
+        specGroup:SetLayout("Flow")
+        scroll:AddChild(specGroup)
+
+        local function RebuildSpecOptions()
+            specGroup:ReleaseChildren()
+            local enabled = db:IsDualSpecEnabled()
+
+            -- 同步"选择配置文件"下拉框的可用状态
+            chooseDD:SetDisabled(enabled)
+
+            local specNames = GetSpecNames()
+            local currentSpec = (GetSpecialization and GetSpecialization()) or 0
+            local allProfiles, allOrder = GetProfileList(db)
+
+            for i, specName in ipairs(specNames) do
+                local label = (i == currentSpec) and format(L.specProfileCurrent, specName) or specName
+
+                local dd = AceGUI:Create("Dropdown")
+                dd:SetLabel(label)
+                dd:SetList(allProfiles, allOrder)
+                dd:SetValue(db:GetDualSpecProfile(i))
+                dd:SetFullWidth(true)
+                dd:SetDisabled(not enabled)
+                dd:SetCallback("OnValueChanged", function(_, _, val)
+                    db:SetDualSpecProfile(val, i)
+                end)
+                specGroup:AddChild(dd)
+            end
+        end
+
+        specToggle:SetCallback("OnValueChanged", function(_, _, val)
+            db:SetDualSpecEnabled(val)
+            RebuildSpecOptions()
+        end)
+
+        RebuildSpecOptions()
+    end
+
+    -- Import / Export
     AddHeading(scroll, L.importExport)
 
     local exportBox = AceGUI:Create("MultiLineEditBox")
@@ -473,42 +602,36 @@ local function BuildGeneralTab(scroll)
         if not str or str == "" then return end
         local ok, errMsg = ns:ImportConfig(str, name)
         if ok then
-            print("|cff00ccff[CDFlow]|r " .. string.format(L.importSuccess, name))
-            local tabs = settingsFrame and settingsFrame.children and settingsFrame.children[1]
-            if tabs and tabs.SelectTab then tabs:SelectTab("general") end
+            print("|cff00ccff[CDFlow]|r " .. format(L.importSuccess, name))
+            RefreshTab()
         else
-            print("|cff00ccff[CDFlow]|r " .. string.format(L.importFail, errMsg or "unknown"))
+            print("|cff00ccff[CDFlow]|r " .. format(L.importFail, errMsg or "unknown"))
         end
     end)
     importGroup:AddChild(importBtn)
 
-    -- 重置为默认配置
+    -- Reset profile
     AddHeading(scroll, "")
 
     local resetBtn = AceGUI:Create("Button")
-    resetBtn:SetText(L.resetDefaults)
+    resetBtn:SetText(L.profileReset)
     resetBtn:SetFullWidth(true)
-    local pendingConfirm = false
+    local pendingReset = false
     resetBtn:SetCallback("OnClick", function()
-        if not pendingConfirm then
-            pendingConfirm = true
-            resetBtn:SetText("|cffff4444" .. L.resetConfirm .. "|r")
+        if not pendingReset then
+            pendingReset = true
+            resetBtn:SetText("|cffff4444" .. L.profileResetConfirm .. "|r")
             C_Timer.After(5, function()
-                if pendingConfirm then
-                    pendingConfirm = false
-                    resetBtn:SetText(L.resetDefaults)
+                if pendingReset then
+                    pendingReset = false
+                    resetBtn:SetText(L.profileReset)
                 end
             end)
         else
-            pendingConfirm = false
-            CDFlowDB_Char.config = ns.DeepCopy(ns.defaults)
-            ns:LoadConfig()
-            Layout:RefreshAll()
-            resetBtn:SetText(L.resetDefaults)
-            if settingsFrame then
-                settingsFrame:Release()
-                settingsFrame = nil
-            end
+            pendingReset = false
+            db:ResetProfile()
+            print("|cff00ccff[CDFlow]|r " .. format(L.profileResetDone, db:GetCurrentProfile()))
+            RefreshTab()
         end
     end)
     scroll:AddChild(resetBtn)
@@ -1090,6 +1213,7 @@ local function GetTabList()
     if not mods or mods.monitorBars then
         tabs[#tabs + 1] = { value = "monitorBars", text = L.monitorBars }
     end
+    tabs[#tabs + 1] = { value = "profiles", text = L.profiles }
     return tabs
 end
 
@@ -1117,6 +1241,8 @@ local function OnTabSelected(container, _, group)
         if ns.BuildMonitorBarsTab then
             ns.BuildMonitorBarsTab(scroll)
         end
+    elseif group == "profiles" then
+        BuildProfilesTab(scroll)
     end
 
     -- 延迟一帧重新布局，确保嵌套容器高度计算正确
