@@ -175,6 +175,7 @@ local S = {
     monitorBars         = { "监控条",           "Monitor Bars" },
     mbLocked            = { "锁定所有位置",     "Lock All Positions" },
     mbUnlockHint        = { "解锁后可拖动条到任意位置", "Unlock to drag bars freely" },
+    mbNudgeHint         = { "滚轮微调 | Shift=水平 | Ctrl=大步进", "Scroll to nudge | Shift=horizontal | Ctrl=10px" },
     mbAddBar            = { "添加监控条",       "Add Monitor Bar" },
     mbManualAdd         = { "手动输入技能ID",   "Manual Spell ID" },
     mbDeleteBar         = { "删除",             "Delete" },

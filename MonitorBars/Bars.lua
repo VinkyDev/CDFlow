@@ -286,19 +286,73 @@ function MB:CreateBarFrame(barCfg)
     f._text:SetTextColor(1, 1, 1, 1)
     f._text:SetJustifyH(align)
 
+    f._posLabel = f:CreateFontString(nil, "OVERLAY")
+    f._posLabel:SetFont(STANDARD_TEXT_FONT or DEFAULT_FONT, 10, "OUTLINE")
+    f._posLabel:SetPoint("BOTTOM", f, "TOP", 0, 2)
+    f._posLabel:SetTextColor(1, 1, 0, 0.8)
+    f._posLabel:Hide()
+
+    local function UpdatePosLabel(frame)
+        if not frame._posLabel then return end
+        local cfg = frame._cfg or barCfg
+        frame._posLabel:SetFormattedText("X: %.0f  Y: %.0f", cfg.posX or 0, cfg.posY or 0)
+    end
+
     f:EnableMouse(true)
     f:SetMovable(true)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", function(self)
         if ns.db.monitorBars.locked then return end
         self:StartMoving()
+        self:SetScript("OnUpdate", function(s)
+            local _, _, _, x, y = s:GetPoint(1)
+            if s._posLabel then
+                s._posLabel:SetFormattedText("X: %.0f  Y: %.0f", x or 0, y or 0)
+            end
+        end)
     end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
+        self:SetScript("OnUpdate", nil)
         local _, _, _, x, y = self:GetPoint(1)
         barCfg.posX = x or 0
         barCfg.posY = y or 0
+        UpdatePosLabel(self)
     end)
+
+    f:SetScript("OnMouseWheel", function(self, delta)
+        if ns.db.monitorBars.locked then return end
+        local step = IsControlKeyDown() and 10 or 1
+        if IsShiftKeyDown() then
+            barCfg.posX = (barCfg.posX or 0) + delta * step
+        else
+            barCfg.posY = (barCfg.posY or 0) + delta * step
+        end
+        self:ClearAllPoints()
+        self:SetPoint("CENTER", UIParent, "CENTER", barCfg.posX, barCfg.posY)
+        UpdatePosLabel(self)
+    end)
+
+    f:SetScript("OnEnter", function(self)
+        if ns.db.monitorBars.locked then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+        local name = barCfg.spellName or ""
+        if name ~= "" then
+            GameTooltip:AddLine(name, 1, 1, 1)
+        end
+        GameTooltip:AddLine(ns.L.mbNudgeHint or "", 0.6, 0.8, 1)
+        GameTooltip:Show()
+    end)
+    f:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    local locked = ns.db and ns.db.monitorBars and ns.db.monitorBars.locked
+    f:EnableMouseWheel(not locked)
+    if not locked then
+        UpdatePosLabel(f)
+        f._posLabel:Show()
+    end
 
     f._cfg = barCfg
     f._cooldownID = nil
@@ -878,6 +932,18 @@ function MB:SetLocked(locked)
     ns.db.monitorBars.locked = locked
     for _, f in pairs(activeFrames) do
         f:EnableMouse(not locked)
+        f:EnableMouseWheel(not locked)
+        if f._posLabel then
+            if locked then
+                f._posLabel:Hide()
+            else
+                local cfg = f._cfg
+                if cfg then
+                    f._posLabel:SetFormattedText("X: %.0f  Y: %.0f", cfg.posX or 0, cfg.posY or 0)
+                end
+                f._posLabel:Show()
+            end
+        end
     end
 end
 
