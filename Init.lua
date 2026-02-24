@@ -137,6 +137,9 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         if ns.db.modules.monitorBars and MB then
             MB:RebuildAllBars()
         end
+        if ns.Visibility then
+            ns.Visibility:Initialize()
+        end
     end
 
     ns.acedb.RegisterCallback(ns, "OnProfileChanged", function() OnProfileChanged() end)
@@ -162,6 +165,7 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
                 MB:ScanCDMViewers()
                 MB:RebuildAllBars()
             end
+            if ns.Visibility then ns.Visibility:UpdateAll() end
         end)
     end
 
@@ -243,6 +247,10 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
     if ns.InitSettings then
         ns:InitSettings()
+    end
+
+    if ns.Visibility then
+        ns.Visibility:Initialize()
     end
 
     if mods.monitorBars then

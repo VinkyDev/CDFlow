@@ -24,6 +24,7 @@ Style\Glow.lua
 Style\Keybind.lua
 Style\Text.lua
 Layout.lua
+Visibility.lua
 MonitorBars\Scanner.lua
 MonitorBars\Bars.lua
 Init.lua

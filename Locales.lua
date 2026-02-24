@@ -97,6 +97,16 @@ local S = {
     hlButton        = { "按钮发光",     "Button Glow" },
     hlNone          = { "禁用",         "None" },
 
+    -- 显示规则
+    visibilityRules      = { "冷却管理器显示规则",       "Cooldown Manager Visibility" },
+    visibilityMode       = { "显示模式",               "Visibility Mode" },
+    visModeAlways        = { "始终显示",               "Always Visible" },
+    visModeCombat        = { "仅在战斗中显示",         "Show Only in Combat" },
+    visModeTarget        = { "有目标时显示",           "Show With Target" },
+    visModeCombatOrTarget= { "战斗中或有目标时显示",   "Show in Combat or With Target" },
+    visHideMounted       = { "骑乘时隐藏",             "Hide When Mounted" },
+    visHideVehicles      = { "载具/特殊场景中隐藏",    "Hide in Vehicles & Override Bar" },
+
     -- 自定义遮罩层
     swipeOverlay    = { "自定义遮罩层",   "Custom Swipe Overlay" },
     swipeActiveColor= { "激活状态遮罩色", "Active Aura Color" },

@@ -182,6 +182,13 @@ ns.defaults = {
         nextID = 1,
         bars   = {},
     },
+
+    -- 显示规则
+    visibility = {
+        mode            = "ALWAYS",
+        hideWhenMounted = false,
+        hideInVehicles  = false,
+    },
 }
 
 local function DeepCopy(src)

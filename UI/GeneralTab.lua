@@ -72,6 +72,36 @@ function ns.BuildGeneralTab(scroll)
         UI.AddCheckbox(scroll, L.suppressDebuffBorder,
             function() return ns.db.suppressDebuffBorder or false end,
             function(v) ns.db.suppressDebuffBorder = v end)
+
+        UI.AddHeading(scroll, L.visibilityRules)
+
+        UI.AddDropdown(scroll, L.visibilityMode,
+            {
+                ALWAYS           = L.visModeAlways,
+                COMBAT_ONLY      = L.visModeCombat,
+                TARGET_ONLY      = L.visModeTarget,
+                COMBAT_OR_TARGET = L.visModeCombatOrTarget,
+            },
+            { "ALWAYS", "COMBAT_ONLY", "TARGET_ONLY", "COMBAT_OR_TARGET" },
+            function() return ns.db.visibility.mode end,
+            function(v)
+                ns.db.visibility.mode = v
+                if ns.Visibility then ns.Visibility:Initialize() end
+            end)
+
+        UI.AddCheckbox(scroll, L.visHideMounted,
+            function() return ns.db.visibility.hideWhenMounted end,
+            function(v)
+                ns.db.visibility.hideWhenMounted = v
+                if ns.Visibility then ns.Visibility:Initialize() end
+            end)
+
+        UI.AddCheckbox(scroll, L.visHideVehicles,
+            function() return ns.db.visibility.hideInVehicles end,
+            function(v)
+                ns.db.visibility.hideInVehicles = v
+                if ns.Visibility then ns.Visibility:Initialize() end
+            end)
     end
 
     UI.AddHeading(scroll, "")
