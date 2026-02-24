@@ -142,37 +142,40 @@ end
 -- 段条 / 边框
 ------------------------------------------------------
 
-local function CreateBorder(parent, cfg)
+local function ApplyWholeBorder(barFrame, cfg)
     local size = cfg.borderSize or 1
-    if size <= 0 then return end
-    if not parent._mbBorder then
-        parent._mbBorder = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    if size <= 0 then
+        if barFrame._mbBorder then barFrame._mbBorder:Hide() end
+        return
     end
-    local border = parent._mbBorder
-    border:SetPoint("TOPLEFT", parent, "TOPLEFT", -size, size)
-    border:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", size, -size)
+    if not barFrame._mbBorder then
+        barFrame._mbBorder = CreateFrame("Frame", nil, barFrame, "BackdropTemplate")
+    end
+    local border = barFrame._mbBorder
+    border:ClearAllPoints()
+    border:SetPoint("TOPLEFT", barFrame, "TOPLEFT", -size, size)
+    border:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", size, -size)
     border:SetBackdrop({
         edgeFile = "Interface\\BUTTONS\\WHITE8X8",
         edgeSize = size,
     })
     local c = cfg.borderColor or { 0, 0, 0, 1 }
     border:SetBackdropBorderColor(c[1], c[2], c[3], c[4])
-    border:SetFrameLevel(parent:GetFrameLevel() + 2)
+    border:SetFrameLevel(barFrame:GetFrameLevel() + 2)
     border:Show()
 end
 
 local function CreateSegments(barFrame, count, cfg)
     barFrame._segments = barFrame._segments or {}
     barFrame._segBGs = barFrame._segBGs or {}
+    barFrame._segBorders = barFrame._segBorders or {}
 
-    for _, seg in ipairs(barFrame._segments) do
-        seg:Hide()
-    end
-    for _, bg in ipairs(barFrame._segBGs) do
-        bg:Hide()
-    end
+    for _, seg in ipairs(barFrame._segments) do seg:Hide() end
+    for _, bg in ipairs(barFrame._segBGs) do bg:Hide() end
+    for _, b in ipairs(barFrame._segBorders) do b:Hide() end
     wipe(barFrame._segments)
     wipe(barFrame._segBGs)
+    wipe(barFrame._segBorders)
 
     if count < 1 then return end
 
@@ -180,9 +183,12 @@ local function CreateSegments(barFrame, count, cfg)
     local totalW = container:GetWidth()
     local totalH = container:GetHeight()
     local gap = cfg.segmentGap ~= nil and cfg.segmentGap or SEGMENT_GAP
+    local borderSize = cfg.borderSize or 1
+    local perSegBorder = (cfg.borderStyle == "segment")
     local segW = (totalW - (count - 1) * gap) / count
     local barColor = cfg.barColor or { 0.2, 0.8, 0.2, 1 }
     local bgColor = cfg.bgColor or { 0.1, 0.1, 0.1, 0.6 }
+    local borderColor = cfg.borderColor or { 0, 0, 0, 1 }
     local texPath = BAR_TEXTURE
     if LSM and LSM.Fetch and cfg.barTexture then
         texPath = LSM:Fetch("statusbar", cfg.barTexture) or BAR_TEXTURE
@@ -209,7 +215,27 @@ local function CreateSegments(barFrame, count, cfg)
         bar:SetFrameLevel(container:GetFrameLevel() + 1)
         ConfigureStatusBar(bar)
 
+        if perSegBorder and borderSize > 0 then
+            local border = CreateFrame("Frame", nil, container, "BackdropTemplate")
+            border:SetPoint("TOPLEFT", bar, "TOPLEFT", -borderSize, borderSize)
+            border:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", borderSize, -borderSize)
+            border:SetBackdrop({
+                edgeFile = "Interface\\BUTTONS\\WHITE8X8",
+                edgeSize = borderSize,
+            })
+            border:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+            border:SetFrameLevel(bar:GetFrameLevel() + 2)
+            border:Show()
+            barFrame._segBorders[i] = border
+        end
+
         barFrame._segments[i] = bar
+    end
+
+    if perSegBorder then
+        if barFrame._mbBorder then barFrame._mbBorder:Hide() end
+    else
+        ApplyWholeBorder(barFrame, cfg)
     end
 end
 
@@ -259,8 +285,6 @@ function MB:CreateBarFrame(barCfg)
     f._text:SetPoint(align, f._textHolder, align, txOff, tyOff)
     f._text:SetTextColor(1, 1, 1, 1)
     f._text:SetJustifyH(align)
-
-    CreateBorder(f, barCfg)
 
     f:EnableMouse(true)
     f:SetMovable(true)
@@ -332,7 +356,12 @@ function MB:ApplyStyle(barFrame)
     barFrame._text:ClearAllPoints()
     barFrame._text:SetPoint(align, barFrame._textHolder, align, cfg.textOffsetX or -4, cfg.textOffsetY or 0)
     barFrame._text:SetJustifyH(align)
-    CreateBorder(barFrame, cfg)
+
+    if cfg.borderStyle ~= "segment" then
+        ApplyWholeBorder(barFrame, cfg)
+    elseif barFrame._mbBorder then
+        barFrame._mbBorder:Hide()
+    end
 
     if cfg.spellID and cfg.spellID > 0 then
         local tex = C_Spell.GetSpellTexture(cfg.spellID)
@@ -693,6 +722,15 @@ updateFrame:Hide()
 -- 生命周期 / 事件
 ------------------------------------------------------
 
+local hasTarget = false
+
+local function ShouldBarBeVisible(barCfg)
+    local cond = barCfg.showCondition or (barCfg.combatOnly and "combat") or "always"
+    if cond == "combat" then return inCombat end
+    if cond == "target" then return hasTarget end
+    return true
+end
+
 local function IsBarVisibleForSpec(barCfg)
     local specs = barCfg.specs
     if not specs or #specs == 0 then return true end
@@ -738,7 +776,11 @@ function MB:InitAllBars()
                 end
             end)
 
-            f:Show()
+            if ShouldBarBeVisible(barCfg) then
+                f:Show()
+            else
+                f:Hide()
+            end
         end
     end
 
@@ -769,12 +811,22 @@ function MB:RebuildAllBars()
     self:InitAllBars()
 end
 
+local function RefreshBarVisibility()
+    for _, f in pairs(activeFrames) do
+        if f._cfg then
+            f:SetShown(ShouldBarBeVisible(f._cfg))
+        end
+    end
+end
+
 function MB:OnCombatEnter()
     inCombat = true
+    RefreshBarVisibility()
 end
 
 function MB:OnCombatLeave()
     inCombat = false
+    RefreshBarVisibility()
     self:ScanCDMViewers()
     for _, f in pairs(activeFrames) do
         f._needsChargeRefresh = true
@@ -811,9 +863,13 @@ function MB:OnAuraUpdate()
 end
 
 function MB:OnTargetChanged()
+    hasTarget = UnitExists("target") == true
     for _, f in pairs(activeFrames) do
-        if f._cfg and f._cfg.unit == "target" then
-            f._trackedAuraInstanceID = nil
+        if f._cfg then
+            if f._cfg.unit == "target" then
+                f._trackedAuraInstanceID = nil
+            end
+            f:SetShown(ShouldBarBeVisible(f._cfg))
         end
     end
 end

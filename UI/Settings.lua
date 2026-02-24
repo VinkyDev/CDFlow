@@ -64,7 +64,9 @@ local function ToggleSettings()
     end
 
     local frame = AceGUI:Create("Frame")
-    frame:SetTitle("CDFlow")
+    local ver = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata("CDFlow", "Version")
+        or GetAddOnMetadata and GetAddOnMetadata("CDFlow", "Version")
+    frame:SetTitle("CDFlow" .. (ver and ("  v" .. ver) or ""))
     frame:SetWidth(520)
     frame:SetHeight(600)
     frame:SetLayout("Fill")
@@ -123,11 +125,11 @@ function ns:InitSettings()
         title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 14, -4)
         title:SetText("|cff00ccffCDFlow|r")
 
-        local version = "2.1.0"
+        local version
         if C_AddOns and C_AddOns.GetAddOnMetadata then
-            version = C_AddOns.GetAddOnMetadata("CDFlow", "Version") or version
+            version = C_AddOns.GetAddOnMetadata("CDFlow", "Version")
         elseif GetAddOnMetadata then
-            version = GetAddOnMetadata("CDFlow", "Version") or version
+            version = GetAddOnMetadata("CDFlow", "Version")
         end
         local ver = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         ver:SetPoint("LEFT", title, "RIGHT", 8, 0)

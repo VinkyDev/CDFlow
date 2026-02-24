@@ -75,8 +75,10 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         barTexture = "Solid",
         colorThreshold  = 0,
         thresholdColor  = { 1.0, 0.5, 0.0, 1 },
+        borderStyle     = "whole",
         segmentGap      = 1,
         hideFromCDM     = false,
+        showCondition   = "always",
         specs      = { GetSpecialization() or 1 },
     }
 end
@@ -177,6 +179,22 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         ns.Layout:RefreshAll()
     end)
     container:AddChild(hideCDMCB)
+
+    local SHOW_COND_ITEMS = {
+        ["always"]  = L.mbCondAlways,
+        ["combat"]  = L.mbCondCombat,
+        ["target"]  = L.mbCondTarget,
+    }
+    local condDD = AceGUI:Create("Dropdown")
+    condDD:SetLabel(L.mbShowCondition)
+    condDD:SetList(SHOW_COND_ITEMS, { "always", "combat", "target" })
+    condDD:SetValue(barCfg.showCondition or "always")
+    condDD:SetFullWidth(true)
+    condDD:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.showCondition = val
+        MB:RebuildAllBars()
+    end)
+    container:AddChild(condDD)
 
     if barCfg.barType == "stack" then
         local maxSlider = AceGUI:Create("Slider")
@@ -368,6 +386,21 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         MB:RebuildAllBars()
     end)
     styleGroup:AddChild(borderSlider)
+
+    local BORDER_STYLE_ITEMS = {
+        ["whole"]   = L.mbBorderWhole,
+        ["segment"] = L.mbBorderSegment,
+    }
+    local borderStyleDD = AceGUI:Create("Dropdown")
+    borderStyleDD:SetLabel(L.mbBorderStyle)
+    borderStyleDD:SetList(BORDER_STYLE_ITEMS, { "whole", "segment" })
+    borderStyleDD:SetValue(barCfg.borderStyle or "whole")
+    borderStyleDD:SetFullWidth(true)
+    borderStyleDD:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.borderStyle = val
+        MB:RebuildAllBars()
+    end)
+    styleGroup:AddChild(borderStyleDD)
 
     local gapSlider = AceGUI:Create("Slider")
     gapSlider:SetLabel(L.mbSegmentGap)

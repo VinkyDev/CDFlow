@@ -227,7 +227,14 @@ local S = {
     mbSpecCurrent       = { "仅当前专精",       "Current Spec Only" },
     mbSpec              = { "专精%d",           "Spec %d" },
     mbAdded             = { "已添加: %s",       "Added: %s" },
+    mbBorderStyle       = { "边框样式",         "Border Style" },
+    mbBorderWhole       = { "整体边框",         "Whole Border" },
+    mbBorderSegment     = { "分段边框",         "Per-Segment Border" },
     mbSegmentGap        = { "分段间距",         "Segment Gap" },
+    mbShowCondition     = { "显示条件",         "Show Condition" },
+    mbCondAlways        = { "始终显示",         "Always" },
+    mbCondCombat        = { "仅战斗中显示",     "Only in Combat" },
+    mbCondTarget        = { "有目标时显示",     "When Has Target" },
 
     -- 功能模块
     moduleManage        = { "功能模块",                                       "Modules" },
