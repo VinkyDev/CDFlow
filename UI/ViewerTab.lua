@@ -91,6 +91,59 @@ local function BuildTextOverlaySection(scroll, title, cfg, options)
 end
 
 ------------------------------------------------------
+-- 自定义遮罩层区块
+------------------------------------------------------
+local function BuildSwipeOverlaySection(scroll, viewerKey)
+    local AceGUI = LibStub("AceGUI-3.0")
+    local cfg = ns.db[viewerKey].swipeOverlay
+
+    UI.AddHeading(scroll, L.swipeOverlay)
+
+    local container = AceGUI:Create("SimpleGroup")
+    container:SetFullWidth(true)
+    container:SetLayout("List")
+    scroll:AddChild(container)
+
+    local function RefreshScrollLayout()
+        C_Timer.After(0, function()
+            if scroll and scroll.DoLayout then scroll:DoLayout() end
+        end)
+    end
+
+    local function RebuildContent()
+        container:ReleaseChildren()
+
+        local cb = AceGUI:Create("CheckBox")
+        cb:SetLabel(L.enable)
+        cb:SetValue(cfg.enabled)
+        cb:SetFullWidth(true)
+        cb:SetCallback("OnValueChanged", function(_, _, val)
+            cfg.enabled = val
+            Layout:RefreshAll()
+            RebuildContent()
+        end)
+        container:AddChild(cb)
+
+        if not cfg.enabled then
+            RefreshScrollLayout()
+            return
+        end
+
+        UI.AddColorPicker(container, L.swipeActiveColor,
+            function() return cfg.activeAuraColor end,
+            function(r, g, b, a) cfg.activeAuraColor = { r, g, b, a } end)
+
+        UI.AddColorPicker(container, L.swipeCDColor,
+            function() return cfg.cdSwipeColor end,
+            function(r, g, b, a) cfg.cdSwipeColor = { r, g, b, a } end)
+
+        RefreshScrollLayout()
+    end
+
+    RebuildContent()
+end
+
+------------------------------------------------------
 -- 行尺寸覆盖
 ------------------------------------------------------
 local function BuildRowOverrides(scroll, viewerKey)
@@ -321,9 +374,9 @@ function ns.BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRow)
         })
     end
 
-    local tip = AceGUI:Create("Label")
-    tip:SetText("|cffaaaaaa" .. L.needReloadHint .. "|r")
-    tip:SetFullWidth(true)
-    tip:SetFontObject(GameFontHighlightSmall)
+    if cfg.swipeOverlay then
+        BuildSwipeOverlaySection(scroll, viewerKey)
+    end
+
     scroll:AddChild(tip)
 end

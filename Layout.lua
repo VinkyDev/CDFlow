@@ -213,10 +213,12 @@ function Layout:RefreshBuffViewer(viewer, cfg)
 
     -- 应用样式
     for _, icon in ipairs(visible) do
+        icon._cdf_viewerKey = "buffs"
         Style:ApplyIcon(icon, w, h, db.iconZoom, db.borderSize)
         Style:ApplyStack(icon, cfg.stack)
         Style:ApplyKeybind(icon, cfg)
         Style:ApplyCooldownText(icon, cfg)
+        Style:ApplySwipeOverlay(icon)
     end
 
     -- 定位
@@ -358,13 +360,16 @@ function Layout:RefreshCDViewer(viewer, cfg)
     end
 
     -- 应用样式
+    local viewerKey = VIEWER_KEY[viewer:GetName()]
     for ri, row in ipairs(rows) do
         local info = rowInfos[ri]
         for _, icon in ipairs(row) do
+            icon._cdf_viewerKey = viewerKey
             Style:ApplyIcon(icon, info.w, info.h, db.iconZoom, db.borderSize)
             Style:ApplyStack(icon, cfg.stack)
             Style:ApplyKeybind(icon, cfg)
             Style:ApplyCooldownText(icon, cfg)
+            Style:ApplySwipeOverlay(icon)
         end
     end
 

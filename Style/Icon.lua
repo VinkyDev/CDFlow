@@ -139,3 +139,20 @@ function Style:ApplyIcon(button, w, h, zoom, borderSize)
         end
     end
 end
+
+-- 一次性挂钩 Cooldown.SetCooldown，按激活/冷却状态应用自定义遮罩色
+function Style:ApplySwipeOverlay(button)
+    if not button or not button.Cooldown then return end
+
+    if not button._cdf_swipeHooked then
+        hooksecurefunc(button.Cooldown, "SetCooldown", function(self)
+            local b = self:GetParent()
+            local key = b._cdf_viewerKey
+            local cfg = key and ns.db and ns.db[key] and ns.db[key].swipeOverlay
+            if not cfg or not cfg.enabled then return end
+            local c = b.wasSetFromAura and cfg.activeAuraColor or cfg.cdSwipeColor
+            self:SetSwipeColor(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+        end)
+        button._cdf_swipeHooked = true
+    end
+end

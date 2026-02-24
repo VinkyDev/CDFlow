@@ -55,6 +55,11 @@ ns.defaults = {
             offsetX  = 0,
             offsetY  = 0,
         },
+        swipeOverlay = {
+            enabled         = false,
+            activeAuraColor = { 1, 0.95, 0.57, 0.69 },
+            cdSwipeColor    = { 0, 0, 0, 0.69 },
+        },
     },
 
     utility = {
@@ -97,6 +102,11 @@ ns.defaults = {
             offsetX  = 0,
             offsetY  = 0,
         },
+        swipeOverlay = {
+            enabled         = false,
+            activeAuraColor = { 1, 0.95, 0.57, 0.69 },
+            cdSwipeColor    = { 0, 0, 0, 0.69 },
+        },
     },
 
     buffs = {
@@ -138,6 +148,11 @@ ns.defaults = {
             point    = "CENTER",
             offsetX  = 0,
             offsetY  = 0,
+        },
+        swipeOverlay = {
+            enabled         = false,
+            activeAuraColor = { 1, 0.95, 0.57, 0.69 },
+            cdSwipeColor    = { 0, 0, 0, 0.69 },
         },
     },
 

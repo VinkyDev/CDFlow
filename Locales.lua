@@ -54,7 +54,6 @@ local S = {
     manualOverride  = { "手动覆盖",     "Manual Override" },
     manualListTitle = { "当前覆盖列表", "Current Overrides" },
     manualListHint  = { "无法自动识别或识别错误时，可按技能ID手动指定显示文本。", "Set display text by spell ID when auto-detection fails." },
-    needReloadHint  = { "如果某些外部插件接管了同一文本，关闭后可能需要 /reload 才完全恢复。", "If another addon controls the same text, you may need /reload after disabling." },
 
     -- 布局选项
     dirDefault      = { "默认",         "Default" },
@@ -97,6 +96,11 @@ local S = {
     hlProc          = { "触发光环",     "Proc" },
     hlButton        = { "按钮发光",     "Button Glow" },
     hlNone          = { "禁用",         "None" },
+
+    -- 自定义遮罩层
+    swipeOverlay    = { "自定义遮罩层",   "Custom Swipe Overlay" },
+    swipeActiveColor= { "激活状态遮罩色", "Active Aura Color" },
+    swipeCDColor    = { "冷却遮罩色",     "Cooldown Swipe Color" },
 
     -- 行覆盖
     rowOverrides    = { "行尺寸覆盖",   "Row Size Override" },
