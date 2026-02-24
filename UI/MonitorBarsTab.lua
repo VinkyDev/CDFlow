@@ -1,6 +1,5 @@
+-- 监控条设置选项卡：条选择、技能目录、专精、样式
 local _, ns = ...
-
--- 监控条设置面板：条选择、技能目录、专精、样式
 
 local L   = ns.L
 local MB  = ns.MonitorBars
@@ -96,7 +95,7 @@ end
 local function BuildBarConfig(container, barCfg, rebuildAll)
     local function Refresh()
         local f = MB:GetActiveFrame(barCfg.id)
-        if f then         MB:ApplyStyle(f) end
+        if f then MB:ApplyStyle(f) end
     end
 
     local enableCB = AceGUI:Create("CheckBox")

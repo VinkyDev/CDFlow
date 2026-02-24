@@ -1,148 +1,27 @@
+-- 监控条创建、样式应用、更新逻辑、事件处理
 local _, ns = ...
 
--- MonitorBars 核心：堆叠条/充能条、CDM 扫描、秘密值检测、事件响应
-
-local MB = {}
-ns.MonitorBars = MB
-
+local MB = ns.MonitorBars
 local LSM = LibStub("LibSharedMedia-3.0", true)
-local DEFAULT_FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
-local BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
-local SEGMENT_GAP = 1
-local UPDATE_INTERVAL = 0.1
+local DEFAULT_FONT = ns._mbConst.DEFAULT_FONT
+local BAR_TEXTURE  = ns._mbConst.BAR_TEXTURE
+local SEGMENT_GAP  = ns._mbConst.SEGMENT_GAP
+local UPDATE_INTERVAL = ns._mbConst.UPDATE_INTERVAL
 
-local spellToCooldownID = {}   -- spellID → cooldownID（战斗外扫描）
-local cooldownIDToFrame = {}  -- cooldownID → CDM 帧缓存
-local activeFrames = {}       -- barID → barFrame
-ns.cdmSuppressedCooldownIDs = {}  -- Layout.lua 消费：需从 CDM 隐藏的 cooldownID
+local ResolveFontPath    = MB.ResolveFontPath
+local ConfigureStatusBar = MB.ConfigureStatusBar
+local HasAuraInstanceID  = MB.HasAuraInstanceID
+local FindCDMFrame       = MB.FindCDMFrame
+local spellToCooldownID  = MB._spellToCooldownID
+local cooldownIDToFrame  = MB._cooldownIDToFrame
+
+local activeFrames = {}
 local elapsed = 0
 local inCombat = false
 
-local function HasAuraInstanceID(value)
-    if value == nil then return false end
-    if issecretvalue and issecretvalue(value) then return true end
-    if type(value) == "number" and value == 0 then return false end
-    return true
-end
-
-local function ResolveFontPath(fontName)
-    if not fontName or fontName == "" then return DEFAULT_FONT end
-    if LSM and LSM.Fetch then
-        local path = LSM:Fetch("font", fontName)
-        if path then return path end
-    end
-    return DEFAULT_FONT
-end
-
-local function ConfigureStatusBar(bar)
-    local tex = bar:GetStatusBarTexture()
-    if tex then
-        tex:SetSnapToPixelGrid(false)
-        tex:SetTexelSnappingBias(0)
-    end
-end
-
-local CDM_VIEWERS = {
-    "BuffIconCooldownViewer",
-    "BuffBarCooldownViewer",
-    "EssentialCooldownViewer",
-    "UtilityCooldownViewer",
-}
-
-local function GetCooldownIDFromFrame(frame)
-    local cdID = frame.cooldownID
-    if not cdID and frame.cooldownInfo then
-        cdID = frame.cooldownInfo.cooldownID
-    end
-    return cdID
-end
-
-local function ResolveSpellID(info)
-    if not info then return nil end
-    local base = info.spellID or 0
-    local linked = info.linkedSpellIDs and info.linkedSpellIDs[1]
-    return linked or info.overrideSpellID or (base > 0 and base) or nil
-end
-
-local function MapSpellInfo(info, cdID, forceOverwrite)
-    if not info then return end
-    local sid = ResolveSpellID(info)
-    if sid and sid > 0 then
-        if forceOverwrite or not spellToCooldownID[sid] then
-            spellToCooldownID[sid] = cdID
-        end
-    end
-    if info.linkedSpellIDs then
-        for _, lid in ipairs(info.linkedSpellIDs) do
-            if lid and lid > 0 and (forceOverwrite or not spellToCooldownID[lid]) then
-                spellToCooldownID[lid] = cdID
-            end
-        end
-    end
-    if info.spellID and info.spellID > 0 then
-        if forceOverwrite or not spellToCooldownID[info.spellID] then
-            spellToCooldownID[info.spellID] = cdID
-        end
-    end
-end
-
-function MB:ScanCDMViewers()
-    if InCombatLockdown() then return end
-
-    wipe(spellToCooldownID)
-    wipe(cooldownIDToFrame)
-
-    -- 阶段 1：API 扫描 aura 类 category（TrackedBuff=2, TrackedBar=3）
-    if C_CooldownViewer.GetCooldownViewerCategorySet then
-        for _, cat in ipairs({ 2, 3 }) do
-            local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
-            if ids then
-                for _, cdID in ipairs(ids) do
-                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                    MapSpellInfo(info, cdID, true)
-                end
-            end
-        end
-    end
-
-    -- 阶段 2：扫描查看器子帧，建立 cooldownID → frame
-    for _, viewerName in ipairs(CDM_VIEWERS) do
-        local viewer = _G[viewerName]
-        if viewer then
-            local isAuraViewer = (viewerName == "BuffIconCooldownViewer" or viewerName == "BuffBarCooldownViewer")
-            for _, child in ipairs({ viewer:GetChildren() }) do
-                local cdID = GetCooldownIDFromFrame(child)
-                if cdID then
-                    cooldownIDToFrame[cdID] = child
-                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                    MapSpellInfo(info, cdID, isAuraViewer)  -- aura 查看器优先覆盖
-                end
-            end
-        end
-    end
-
-    self:PostScanHook()
-end
-
-local function FindCDMFrame(cooldownID)
-    if not cooldownID then return nil end
-    local cached = cooldownIDToFrame[cooldownID]
-    if cached then return cached end
-
-    for _, viewerName in ipairs(CDM_VIEWERS) do
-        local viewer = _G[viewerName]
-        if viewer then
-            for _, child in ipairs({ viewer:GetChildren() }) do
-                local cdID = GetCooldownIDFromFrame(child)
-                if cdID == cooldownID then
-                    cooldownIDToFrame[cdID] = child
-                    return child
-                end
-            end
-        end
-    end
-    return nil
-end
+------------------------------------------------------
+-- CDM 帧 Hook 管理
+------------------------------------------------------
 
 local hookedFrames = {}
 local frameToBarIDs = {}
@@ -208,46 +87,10 @@ function MB:PostScanHook()
     AutoHookStackBars()
 end
 
-function MB:GetSpellCatalog()
-    local cooldowns, auras = {}, {}
-    local seen = {}
+------------------------------------------------------
+-- 秘密值检测（Arc Detectors）
+------------------------------------------------------
 
-    local AURA_VIEWERS = { BuffIconCooldownViewer = true, BuffBarCooldownViewer = true }
-
-    for _, viewerName in ipairs(CDM_VIEWERS) do
-        local viewer = _G[viewerName]
-        if viewer then
-            local isAura = AURA_VIEWERS[viewerName]
-            for _, child in ipairs({ viewer:GetChildren() }) do
-                local cdID = GetCooldownIDFromFrame(child)
-                if cdID then
-                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                    local spellID = ResolveSpellID(info)
-                    if spellID and spellID > 0 and not seen[spellID] then
-                        seen[spellID] = true
-                        local name = C_Spell.GetSpellName(spellID)
-                        local icon = C_Spell.GetSpellTexture(spellID)
-                        if name then
-                            local unit = child.auraDataUnit or "player"
-                            local entry = { spellID = spellID, name = name, icon = icon, unit = unit }
-                            if isAura then
-                                auras[#auras + 1] = entry
-                            else
-                                cooldowns[#cooldowns + 1] = entry
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    table.sort(cooldowns, function(a, b) return a.name < b.name end)
-    table.sort(auras, function(a, b) return a.name < b.name end)
-    return cooldowns, auras
-end
-
--- 秘密值检测：通过 StatusBar SetValue 配合 issecretvalue 解析层数/充能
 local function GetArcDetector(barFrame, threshold)
     barFrame._arcDetectors = barFrame._arcDetectors or {}
     local det = barFrame._arcDetectors[threshold]
@@ -294,6 +137,10 @@ local function GetOrCreateShadowCooldown(barFrame)
     barFrame._shadowCooldown = cd
     return cd
 end
+
+------------------------------------------------------
+-- 段条 / 边框
+------------------------------------------------------
 
 local function CreateBorder(parent, cfg)
     local size = cfg.borderSize or 1
@@ -365,6 +212,10 @@ local function CreateSegments(barFrame, count, cfg)
         barFrame._segments[i] = bar
     end
 end
+
+------------------------------------------------------
+-- 条创建 / 样式
+------------------------------------------------------
 
 function MB:CreateBarFrame(barCfg)
     local id = barCfg.id
@@ -488,6 +339,10 @@ function MB:ApplyStyle(barFrame)
         if tex then barFrame._icon:SetTexture(tex) end
     end
 end
+
+------------------------------------------------------
+-- 更新逻辑
+------------------------------------------------------
 
 local function ApplySegmentColors(barFrame, currentCount)
     local cfg = barFrame._cfg
@@ -725,7 +580,7 @@ local function UpdateChargeBar(barFrame)
     local needApplyTimer = false
     if barFrame._needsDurationRefresh then
         if isSecret and chargeJustRefreshed then
-            -- 秘密值需一帧渲染后才能解析，下帧再刷新 duration
+            -- 秘密值需一帧渲染后才能解析
         else
             barFrame._cachedChargeDurObj = C_Spell.GetSpellChargeDuration(spellID)
             barFrame._needsDurationRefresh = false
@@ -805,6 +660,10 @@ local function UpdateChargeBar(barFrame)
     end
 end
 
+------------------------------------------------------
+-- OnUpdate 循环
+------------------------------------------------------
+
 local function UpdateAllBars()
     local bars = ns.db and ns.db.monitorBars and ns.db.monitorBars.bars
     if not bars then return end
@@ -829,6 +688,10 @@ updateFrame:SetScript("OnUpdate", function(_, dt)
     UpdateAllBars()
 end)
 updateFrame:Hide()
+
+------------------------------------------------------
+-- 生命周期 / 事件
+------------------------------------------------------
 
 local function IsBarVisibleForSpec(barCfg)
     local specs = barCfg.specs

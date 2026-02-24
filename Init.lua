@@ -1,16 +1,11 @@
+-- 插件入口：事件编排、查看器 Hook、高亮 Hook
 local _, ns = ...
-
-------------------------------------------------------
--- 核心模块
-------------------------------------------------------
 
 local Layout = ns.Layout
 local Style  = ns.Style
 local L = ns.L
 local MB = ns.MonitorBars
 
--- Buff 图标子帧 Hook（防抖：避免 OnActiveStateChanged 等频繁触发导致闪烁）
-------------------------------------------------------
 local buffRefreshPending = false
 
 local function RequestBuffViewerRefresh()
@@ -43,9 +38,6 @@ local function HookBuffChildren()
     end
 end
 
-------------------------------------------------------
--- Hook 三个冷却查看器的 RefreshLayout
-------------------------------------------------------
 local function RegisterHooks()
     if EssentialCooldownViewer then
         hooksecurefunc(EssentialCooldownViewer, "RefreshLayout", function()
@@ -73,9 +65,6 @@ local function RegisterHooks()
     end
 end
 
-------------------------------------------------------
--- 高亮特效 Hook（检测技能激活/取消高亮）
-------------------------------------------------------
 local VIEWER_SET = {}
 
 local function SetupGlowHooks()
@@ -106,9 +95,6 @@ local function SetupGlowHooks()
     end)
 end
 
-------------------------------------------------------
--- EventRegistry 回调：响应冷却管理器设置变更
-------------------------------------------------------
 local refreshAllPending = false
 
 local function RequestRefreshAll(delay)
@@ -143,7 +129,6 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
     ns:InitDB()
 
-    -- AceDB profile change callbacks
     local function OnProfileChanged()
         ns:OnProfileChanged()
         if ns.db.modules.cdmBeautify then
@@ -160,14 +145,12 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
     local mods = ns.db.modules
 
-    -- CDM 美化模块（含高亮特效）
     if mods.cdmBeautify then
         RegisterHooks()
         RegisterEventRegistryCallbacks()
         SetupGlowHooks()
     end
 
-    -- 按模块注册游戏事件
     local eventFrame = CreateFrame("Frame")
     local eventHandlers = {}
 
@@ -258,12 +241,10 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         if handler then handler(...) end
     end)
 
-    -- 初始化设置面板
     if ns.InitSettings then
         ns:InitSettings()
     end
 
-    -- 初始化监控条（延迟，等 CDM 就绪）
     if mods.monitorBars then
         C_Timer.After(1, function()
             MB:ScanCDMViewers()
