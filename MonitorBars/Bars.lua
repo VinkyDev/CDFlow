@@ -305,18 +305,32 @@ function MB:CreateBarFrame(barCfg)
         if ns.db.monitorBars.locked then return end
         self:StartMoving()
         self:SetScript("OnUpdate", function(s)
-            local _, _, _, x, y = s:GetPoint(1)
-            if s._posLabel then
-                s._posLabel:SetFormattedText("X: %.0f  Y: %.0f", x or 0, y or 0)
+            local cx, cy = s:GetCenter()
+            local p = s:GetParent()
+            if p and p == UIParent then
+                local posX = cx - p:GetWidth() * 0.5
+                local posY = cy - p:GetHeight() * 0.5
+                if s._posLabel then
+                    s._posLabel:SetFormattedText("X: %.0f  Y: %.0f", posX, posY)
+                end
             end
         end)
     end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         self:SetScript("OnUpdate", nil)
-        local _, _, _, x, y = self:GetPoint(1)
-        barCfg.posX = x or 0
-        barCfg.posY = y or 0
+        local cx, cy = self:GetCenter()
+        local p = self:GetParent()
+        if p and p == UIParent then
+            barCfg.posX = cx - p:GetWidth() * 0.5
+            barCfg.posY = cy - p:GetHeight() * 0.5
+        else
+            local _, _, _, x, y = self:GetPoint(1)
+            barCfg.posX = x or 0
+            barCfg.posY = y or 0
+        end
+        self:ClearAllPoints()
+        self:SetPoint("CENTER", UIParent, "CENTER", barCfg.posX, barCfg.posY)
         UpdatePosLabel(self)
     end)
 
