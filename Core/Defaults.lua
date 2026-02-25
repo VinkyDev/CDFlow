@@ -15,8 +15,9 @@ ns.defaults = {
 
     -- 追踪状态栏
     trackedBars = {
-        growDir          = "BOTTOM",
+        growDir          = "CENTER",
         barHeight        = 20,
+        spacing          = 2,
         iconPosition     = "LEFT",
         barTexture       = "Solid",
         barColor         = { 0.4, 0.6, 0.9, 1.0 },
@@ -37,6 +38,7 @@ ns.defaults = {
     essential = {
         enabled     = true,
         growDir     = "TOP",
+        rowAnchor   = "CENTER",
         iconsPerRow = 8,
         iconWidth   = 52,
         iconHeight  = 52,
@@ -84,6 +86,7 @@ ns.defaults = {
     utility = {
         enabled     = true,
         growDir     = "TOP",
+        rowAnchor   = "CENTER",
         iconsPerRow = 6,
         iconWidth   = 30,
         iconHeight  = 30,

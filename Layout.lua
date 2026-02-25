@@ -56,20 +56,30 @@ local function CollectAllIcons(viewer)
 end
 
 -- 从全量列表中筛选可见图标，同时记录每个图标的固定槽位索引
--- 跳过被监控条隐藏（hideFromCDM）的图标，并将其 alpha 置 0
+-- 跳过被监控条隐藏（hideFromCDM）的图标：alpha 置 0、移出布局区
+-- 有 suppressed 时使用紧凑槽位，避免占据空位
 local function SplitVisible(allIcons)
     local visible = {}
     local slotOf = {}
     local suppressed = ns.cdmSuppressedCooldownIDs
+    local hasSuppressed = false
     for slot, icon in ipairs(allIcons) do
         if icon:IsShown() then
             if suppressed and suppressed[icon.cooldownID] then
+                hasSuppressed = true
                 icon:SetAlpha(0)
+                icon:ClearAllPoints()
+                icon:SetPoint("CENTER", icon:GetParent(), "CENTER", -5000, 0)
             else
                 icon:SetAlpha(1)
                 visible[#visible + 1] = icon
                 slotOf[icon] = slot - 1   -- 0-based 槽位
             end
+        end
+    end
+    if hasSuppressed then
+        for i, icon in ipairs(visible) do
+            slotOf[icon] = i - 1
         end
     end
     return visible, slotOf
@@ -103,7 +113,123 @@ local function SetPointCached(icon, anchor, viewer, x, y)
     icon:SetPoint(anchor, viewer, anchor, x, y)
 end
 
-local function CollectTrackedBars(viewer)
+------------------------------------------------------
+-- 同步 viewer 尺寸与实际图标边界框（参考 CooldownManagerCentered）
+-- 使编辑模式的圈选区域与实际显示区域一致
+------------------------------------------------------
+local function UpdateViewerSizeToMatchIcons(viewer, icons)
+    if not viewer or not icons or #icons == 0 then return end
+    local vScale = viewer:GetEffectiveScale()
+    if not vScale or vScale == 0 then return end
+
+    local left, right, top, bottom = 999999, 0, 0, 999999
+    for _, icon in ipairs(icons) do
+        if icon and icon:IsShown() then
+            local scale = icon:GetEffectiveScale() / vScale
+            local l = (icon:GetLeft() or 0) * scale
+            local r = (icon:GetRight() or 0) * scale
+            local t = (icon:GetTop() or 0) * scale
+            local b = (icon:GetBottom() or 0) * scale
+            if l < left then left = l end
+            if r > right then right = r end
+            if t > top then top = t end
+            if b < bottom then bottom = b end
+        end
+    end
+
+    if left >= right or bottom >= top then return end
+
+    -- 已转换为 viewer 本地单位，直接使用（与 CMC 一致）
+    local targetW = right - left
+    local targetH = top - bottom
+    local curW = viewer:GetWidth()
+    local curH = viewer:GetHeight()
+    if curW and curH and (math.abs(curW - targetW) >= 1 or math.abs(curH - targetH) >= 1) then
+        viewer:SetSize(targetW, targetH)
+    end
+end
+
+------------------------------------------------------
+-- 同步 viewer 尺寸与追踪条，并按生长方向设置锚点
+-- 关键：viewer 的锚点决定 SetSize 时从哪一侧扩展
+--   TOP    → 锚定 TOP，向下生长
+--   BOTTOM → 锚定 BOTTOM，向上生长
+--   CENTER → 锚定 CENTER，向两侧扩展
+------------------------------------------------------
+local function UpdateViewerSizeToMatchTrackedBars(viewer, bars, growDir)
+    if not viewer or not bars or #bars == 0 then return end
+    local vScale = viewer:GetEffectiveScale()
+    if not vScale or vScale == 0 then return end
+
+    local left, right, top, bottom = 999999, 0, 0, 999999
+    for _, bar in ipairs(bars) do
+        if bar and bar:IsShown() then
+            local scale = bar:GetEffectiveScale() / vScale
+            local l = (bar:GetLeft() or 0) * scale
+            local r = (bar:GetRight() or 0) * scale
+            local t = (bar:GetTop() or 0) * scale
+            local b = (bar:GetBottom() or 0) * scale
+            if l < left then left = l end
+            if r > right then right = r end
+            if t > top then top = t end
+            if b < bottom then bottom = b end
+        end
+    end
+
+    if left >= right or bottom >= top then return end
+
+    local targetW = right - left
+    local targetH = top - bottom
+    local curW = viewer:GetWidth()
+    local curH = viewer:GetHeight()
+    if curW and curH and (math.abs(curW - targetW) >= 1 or math.abs(curH - targetH) >= 1) then
+        local parent = viewer:GetParent()
+        if not parent then parent = UIParent end
+
+        local relTo = parent
+        local relPoint = "CENTER"
+        local xOfs, yOfs = 0, 0
+        local numPoints = viewer:GetNumPoints()
+        if numPoints > 0 then
+            local _, rel, rp, x, y = viewer:GetPoint(1)
+            if rel then relTo = rel end
+            if rp then relPoint = rp end
+            xOfs, yOfs = x or 0, y or 0
+        end
+
+        -- 在 SetSize 前重设锚点，使 viewer 从正确方向生长
+        local anchorPoint = (growDir == "TOP") and "TOP" or (growDir == "BOTTOM") and "BOTTOM" or "CENTER"
+        -- 关键：保留 Edit Mode 的 relTo/relPoint，仅调整 viewer 的锚点与 y 偏移
+        -- 避免覆盖用户保存的位置（防止退出编辑模式后位置上移）
+        local function vertOffset(p)
+            if p == "TOP" or p == "TOPLEFT" or p == "TOPRIGHT" then return 1 end
+            if p == "BOTTOM" or p == "BOTTOMLEFT" or p == "BOTTOMRIGHT" then return -1 end
+            return 0
+        end
+        local oldPoint = (numPoints > 0) and (select(1, viewer:GetPoint(1))) or "CENTER"
+        local oldV, newV = vertOffset(oldPoint), vertOffset(anchorPoint)
+        local dy = (newV - oldV) * curH / 2
+        local newY = yOfs + dy
+
+        viewer:ClearAllPoints()
+        viewer:SetPoint(anchorPoint, relTo, relPoint, xOfs, newY)
+        viewer:SetSize(targetW, targetH)
+    end
+end
+
+-- 获取追踪条的唯一标识（用于激活顺序）
+local function GetTrackedBarId(bar)
+    if bar.cooldownID then return bar.cooldownID end
+    if bar.cooldownInfo and bar.cooldownInfo.cooldownID then
+        return bar.cooldownInfo.cooldownID
+    end
+    return bar.layoutIndex or bar:GetName() or tostring(bar)
+end
+
+-- 追踪条激活顺序（会话内持久，先出现者在前）
+local _trackedBarsActivationOrder = {}
+
+local function CollectTrackedBars(viewer, sortByActivation)
     if not viewer then return {} end
     local frames = {}
 
@@ -130,9 +256,42 @@ local function CollectTrackedBars(viewer)
         end
     end
 
-    table.sort(active, function(a, b)
-        return (a.layoutIndex or 0) < (b.layoutIndex or 0)
-    end)
+    if sortByActivation then
+        -- 按先来后到：新出现的条追加到末尾
+        local idToBar = {}
+        for _, bar in ipairs(active) do
+            idToBar[GetTrackedBarId(bar)] = bar
+        end
+
+        local newOrder = {}
+        local added = {}
+        for _, id in ipairs(_trackedBarsActivationOrder) do
+            if idToBar[id] then
+                newOrder[#newOrder + 1] = id
+                added[id] = true
+            end
+        end
+        for _, bar in ipairs(active) do
+            local id = GetTrackedBarId(bar)
+            if not added[id] then
+                newOrder[#newOrder + 1] = id
+                added[id] = true
+            end
+        end
+        _trackedBarsActivationOrder = newOrder
+
+        local orderIdx = {}
+        for i, id in ipairs(newOrder) do
+            orderIdx[id] = i
+        end
+        table.sort(active, function(a, b)
+            return (orderIdx[GetTrackedBarId(a)] or 999) < (orderIdx[GetTrackedBarId(b)] or 999)
+        end)
+    else
+        table.sort(active, function(a, b)
+            return (a.layoutIndex or 0) < (b.layoutIndex or 0)
+        end)
+    end
     return active
 end
 
@@ -182,7 +341,18 @@ function Layout:RefreshBuffViewer(viewer, cfg)
         return
     end
 
+    -- 居中时 total 排除 hideFromCDM 的 buff，不参与布局计算
+    local suppressed = ns.cdmSuppressedCooldownIDs
     local total = #allIcons
+    if doCenter and suppressed then
+        local nonSuppressed = 0
+        for _, icon in ipairs(allIcons) do
+            if not suppressed[icon.cooldownID] then
+                nonSuppressed = nonSuppressed + 1
+            end
+        end
+        total = nonSuppressed
+    end
     local buffGlowCfg = db.buffGlow
 
     -- 构建可见集合，用于快速查找
@@ -229,6 +399,9 @@ function Layout:RefreshBuffViewer(viewer, cfg)
     else
         self:LayoutBuffV(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
     end
+
+    -- 同步 viewer 尺寸与图标边界，使编辑模式圈选区域与实际显示一致
+    UpdateViewerSizeToMatchIcons(viewer, visible)
 end
 
 -- Buff 水平布局
@@ -327,13 +500,16 @@ function Layout:RefreshCDViewer(viewer, cfg)
     else
         self:LayoutCDV(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
     end
+
+    -- 同步 viewer 尺寸与图标边界，使编辑模式圈选区域与实际显示一致
+    UpdateViewerSizeToMatchIcons(viewer, visible)
 end
 
 ------------------------------------------------------
 -- 技能水平布局
 -- growDir "TOP"    → anchor=TOPLEFT,  行从上往下叠（yOffset 递减）
 -- growDir "BOTTOM" → anchor=BOTTOMLEFT, 行从下往上叠（yOffset 递增）
--- 行内水平：始终以满行宽度为基准居中
+-- rowAnchor: LEFT/CENTER/RIGHT 行内水平锚点
 ------------------------------------------------------
 function Layout:LayoutCDH(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
     local fromBottom = (growDir == "BOTTOM")
@@ -344,14 +520,24 @@ function Layout:LayoutCDH(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
     local refW = rowInfos[1].w
     local refTotalW = limit * (refW + cfg.spacingX) - cfg.spacingX
 
+    local anchorMode = (cfg.rowAnchor == "LEFT" or cfg.rowAnchor == "RIGHT") and cfg.rowAnchor or "CENTER"
+
     local yAccum = 0
     for ri, row in ipairs(rows) do
         local w, h = rowInfos[ri].w, rowInfos[ri].h
         local count = #row
         local rowContentW = count * (w + cfg.spacingX) - cfg.spacingX
 
-        -- 行内始终水平居中（以满行宽度为基准）
-        local startX = ((refTotalW - rowContentW) / 2) * iconDir
+        -- 行内水平锚点：左 / 中 / 右
+        -- iconDir=1(TOPLEFT): 正x向右; iconDir=-1(TOPRIGHT): 正x向左
+        local startX
+        if anchorMode == "LEFT" then
+            startX = (iconDir == 1) and 0 or ((refTotalW - rowContentW) / 2)
+        elseif anchorMode == "RIGHT" then
+            startX = (iconDir == 1) and (refTotalW - rowContentW) or 0
+        else
+            startX = ((refTotalW - rowContentW) / 2) * iconDir
+        end
 
         local yOffset = yAccum * rowOffsetMod
         for i, icon in ipairs(row) do
@@ -371,17 +557,13 @@ end
 ------------------------------------------------------
 function Layout:LayoutCDV(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
     local fromBottom = (growDir == "BOTTOM")
-    -- 垂直布局中，"BOTTOM"意味着列从右向左增长
     local colOffsetMod = fromBottom and -1 or 1
     local iconVertDir = -iconDir
 
-    -- anchor 的垂直分量由 iconDir 决定（和原逻辑一致）
-    -- 水平分量由 growDir 决定
     local vertPart = (iconDir == 1) and "BOTTOM" or "TOP"
     local horizPart = fromBottom and "RIGHT" or "LEFT"
     local colAnchor = vertPart .. horizPart
 
-    -- 参考高度：第一列满列时的总高度
     local refH = rowInfos[1].h
     local refTotalH = limit * (refH + cfg.spacingY) - cfg.spacingY
 
@@ -391,7 +573,6 @@ function Layout:LayoutCDV(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
         local count = #row
         local colContentH = count * (h + cfg.spacingY) - cfg.spacingY
 
-        -- 列内始终垂直居中（以满列高度为基准）
         local startY = -((refTotalH - colContentH) / 2) * iconVertDir
 
         local xOffset = xAccum * colOffsetMod
@@ -606,6 +787,11 @@ end
 
 ------------------------------------------------------
 -- 追踪状态栏（Tracked Bars）布局
+--
+-- 生长方向 growDir（与 Buff 配置类似）：
+--   TOP    → 第一个条在区域顶部，新条在其下方追加
+--   CENTER → 第一个条在区域中间；新条出现时整组始终居中
+--   BOTTOM → 第一个条在区域底部，新条在其上方追加
 ------------------------------------------------------
 function Layout:RefreshTrackedBars()
     local viewer = _G.BuffBarCooldownViewer
@@ -613,7 +799,7 @@ function Layout:RefreshTrackedBars()
     if EditModeManagerFrame and EditModeManagerFrame.layoutApplyInProgress then return end
     if viewer.IsInitialized and not viewer:IsInitialized() then return end
 
-    local bars = CollectTrackedBars(viewer)
+    local bars = CollectTrackedBars(viewer, true)  -- true = 按先来后到排序
     if #bars == 0 then return end
 
     local cfg = (ns.db and ns.db.trackedBars) or ns.defaults.trackedBars
@@ -628,16 +814,35 @@ function Layout:RefreshTrackedBars()
         or 20
     if barHeight <= 0 then return end
 
-    local spacing = viewer.childYPadding or 0
-    local growFromBottom = (cfg.growDir ~= "TOP")
+    -- 间距：优先使用配置，覆盖系统 viewer.childYPadding
+    local spacing = (cfg.spacing ~= nil) and cfg.spacing or (viewer.childYPadding or 0)
+    local growDir = cfg.growDir or "CENTER"
+    local step = barHeight + spacing
+    local n = #bars
 
     for index, bar in ipairs(bars) do
-        local offset = index - 1
-        local y = growFromBottom and (offset * (barHeight + spacing)) or (-offset * (barHeight + spacing))
-        if growFromBottom then
-            SetPointCached(bar, "BOTTOM", viewer, 0, y)
+        local i = index - 1  -- 0-based
+        local y
+        local anchor
+
+        if growDir == "TOP" then
+            -- 从上到下：第一个在顶部，后续在其下方追加
+            anchor = "TOP"
+            y = -i * step
+        elseif growDir == "BOTTOM" then
+            -- 从下到上：第一个在底部，后续在其上方追加
+            anchor = "BOTTOM"
+            y = i * step
         else
-            SetPointCached(bar, "TOP", viewer, 0, y)
+            -- 居中：整组始终居中于区域
+            -- 第一个条在组顶部，最后一个在组底部，组中心对齐 viewer 中心
+            anchor = "CENTER"
+            y = (n - 1) * step / 2 - i * step
         end
+
+        SetPointCached(bar, anchor, viewer, 0, y)
     end
+
+    -- 同步 viewer 尺寸与条边界，并按生长方向设置锚点（使扩展从正确方向发生）
+    UpdateViewerSizeToMatchTrackedBars(viewer, bars, growDir)
 end

@@ -249,6 +249,10 @@ function ns.BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRow)
             { "TOP", "BOTTOM" },
             function() return cfg.growDir end,
             function(v) cfg.growDir = v end)
+        UI.AddDropdown(scroll, L.rowAnchor, UI.ROW_ANCHOR_ITEMS,
+            { "LEFT", "CENTER", "RIGHT" },
+            function() return cfg.rowAnchor or "CENTER" end,
+            function(v) cfg.rowAnchor = v Layout:RefreshAll() end)
     end
 
     if showPerRow then

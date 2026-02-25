@@ -26,7 +26,8 @@ local S = {
     customizeStyle  = { "自定义样式",   "Customize Style" },
     enableDisplay   = { "启用显示",     "Enable Display" },
     growDir         = { "布局方向",     "Layout Direction" },
-    trackedBarsGrowDir = { "追踪状态栏方向", "Tracked Bars Direction" },
+    rowAnchor       = { "行内锚点",     "Row Anchor" },
+    trackedBarsGrowDir = { "生长方向", "Growth Direction" },
     iconsPerRow     = { "每行数量",     "Icons Per Row" },
     iconsPerRowTip  = { "0 = 不限制，单行/单列显示。推荐设为 0。", "0 = unlimited, single row/column. Recommended: 0." },
     iconWidth       = { "图标宽度",     "Icon Width" },
@@ -55,6 +56,10 @@ local S = {
     manualListTitle = { "当前覆盖列表", "Current Overrides" },
     manualListHint  = { "无法自动识别或识别错误时，可按技能ID手动指定显示文本。", "Set display text by spell ID when auto-detection fails." },
 
+    -- 行内锚点（左/中/右）
+    anchorLeft      = { "左",           "Left" },
+    anchorCenter    = { "中",           "Center" },
+    anchorRight     = { "右",           "Right" },
     -- 布局方向选项（重要技能 / 效能技能）
     dirGrowDown     = { "向下增长",                 "Grow Down" },
     dirGrowUp       = { "向上增长",                 "Grow Up" },
@@ -64,12 +69,16 @@ local S = {
     -- 追踪状态栏方向
     dirTop          = { "顶部向下",     "Top to Bottom" },
     dirBottom       = { "底部向上",     "Bottom to Top" },
+    dirTbCenter     = { "从中间",       "From Center" },
+    dirTbTop        = { "从上到下",     "Top to Bottom" },
+    dirTbBottom     = { "从下到上",     "Bottom to Top" },
 
     -- 追踪状态栏 Tab
     trackedBars          = { "追踪状态栏",       "Tracked Bars" },
     tbLayout             = { "布局",             "Layout" },
     tbAppearance         = { "外观",             "Appearance" },
     tbBarHeight          = { "条高度",           "Bar Height" },
+    tbSpacing            = { "条间距",           "Bar Spacing" },
     tbIconPosition       = { "图标位置",         "Icon Position" },
     tbIconLeft           = { "左侧",             "Left" },
     tbIconRight          = { "右侧",             "Right" },
@@ -147,10 +156,6 @@ local S = {
                         "Lightweight Cooldown Manager Beautifier, focused on simplicity." },
     aboutAuthor     = { "作者",         "Author" },
     aboutGithub     = { "GitHub",       "GitHub" },
-
-    -- 概览面板
-    overviewTip     = { "修改技能美化配置后，建议进入编辑模式调整冷却管理器的「图标列数」和「图标填充」，让框选区域与实际显示区域吻合，以便在编辑模式中调整位置与更智能的自动对齐。",
-    "After changing settings, enter Edit Mode and adjust the cooldown manager's Column Count and Icon Padding so the selection area matches the actual display, for better positioning and smarter auto-snapping." },
 
     -- 概览快捷操作
     openEditMode    = { "打开编辑模式",   "Open Edit Mode" },

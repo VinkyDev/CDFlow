@@ -7,15 +7,7 @@ local L = ns.L
 local MB = ns.MonitorBars
 
 local buffRefreshPending = false
-
-local function RequestBuffViewerRefresh()
-    if buffRefreshPending then return end
-    buffRefreshPending = true
-    C_Timer.After(0.05, function()
-        buffRefreshPending = false
-        Layout:RefreshViewer("BuffIconCooldownViewer")
-    end)
-end
+local trackedBarsRefreshPending = false
 
 local function HookBuffChildren()
     local viewer = BuffIconCooldownViewer
@@ -25,17 +17,62 @@ local function HookBuffChildren()
     for _, child in ipairs(children) do
         if child and child.Icon and not child._cdf_hooked then
             child._cdf_hooked = true
-            if child.OnActiveStateChanged then
-                hooksecurefunc(child, "OnActiveStateChanged", RequestBuffViewerRefresh)
-            end
-            if child.OnUnitAuraAddedEvent then
-                hooksecurefunc(child, "OnUnitAuraAddedEvent", RequestBuffViewerRefresh)
-            end
-            if child.OnUnitAuraRemovedEvent then
-                hooksecurefunc(child, "OnUnitAuraRemovedEvent", RequestBuffViewerRefresh)
+            if child.HookScript then
+                for _, script in ipairs({ "OnActiveStateChanged", "OnUnitAuraAddedEvent", "OnUnitAuraRemovedEvent" }) do
+                    pcall(child.HookScript, child, script, RequestBuffViewerRefresh)
+                end
             end
         end
     end
+end
+
+local function RequestBuffViewerRefresh()
+    if buffRefreshPending then return end
+    buffRefreshPending = true
+    C_Timer.After(0.05, function()
+        buffRefreshPending = false
+        HookBuffChildren()
+        Layout:RefreshViewer("BuffIconCooldownViewer")
+    end)
+end
+
+local function HookTrackedBarChildren()
+    local viewer = BuffBarCooldownViewer
+    if not viewer then return end
+
+    local frames = {}
+    if viewer.GetItemFrames then
+        local ok, items = pcall(viewer.GetItemFrames, viewer)
+        if ok and type(items) == "table" then frames = items end
+    end
+    if #frames == 0 then
+        for _, child in ipairs({ viewer:GetChildren() }) do
+            if child and child:IsObjectType("Frame") then
+                frames[#frames + 1] = child
+            end
+        end
+    end
+
+    for _, frame in ipairs(frames) do
+        if frame and not frame._cdf_tb_hooked then
+            frame._cdf_tb_hooked = true
+            if frame.HookScript then
+                for _, script in ipairs({ "OnActiveStateChanged", "OnUnitAuraAddedEvent", "OnUnitAuraRemovedEvent", "OnShow" }) do
+                    pcall(frame.HookScript, frame, script, RequestTrackedBarsRefresh)
+                end
+            end
+        end
+    end
+end
+
+local function RequestTrackedBarsRefresh()
+    if trackedBarsRefreshPending then return end
+    trackedBarsRefreshPending = true
+    C_Timer.After(0.05, function()
+        trackedBarsRefreshPending = false
+        HookTrackedBarChildren()
+        Layout:RefreshTrackedBars()
+    end)
 end
 
 local function RegisterHooks()
@@ -60,6 +97,7 @@ local function RegisterHooks()
 
     if BuffBarCooldownViewer then
         hooksecurefunc(BuffBarCooldownViewer, "RefreshLayout", function()
+            HookTrackedBarChildren()
             Layout:RefreshTrackedBars()
         end)
     end
@@ -109,6 +147,8 @@ end
 local function RegisterEventRegistryCallbacks()
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
         RequestRefreshAll(0)
+        C_Timer.After(0.15, RequestBuffViewerRefresh)
+        C_Timer.After(0.15, RequestTrackedBarsRefresh)
     end)
 
     EventRegistry:RegisterCallback("EditMode.Enter", function()
@@ -154,17 +194,25 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         SetupGlowHooks()
     end
 
+    if mods.cdmBeautify and mods.monitorBars and MB then
+        hooksecurefunc(MB, "RebuildAllBars", function()
+            C_Timer.After(0, function()
+                if ns.db.modules.cdmBeautify then Layout:RefreshAll() end
+            end)
+        end)
+    end
+
     local eventFrame = CreateFrame("Frame")
     local eventHandlers = {}
 
     eventHandlers["PLAYER_ENTERING_WORLD"] = function()
         if mods.cdmBeautify then RequestRefreshAll(0) end
         C_Timer.After(0.5, function()
-            if mods.cdmBeautify then Layout:RefreshAll() end
             if mods.monitorBars then
                 MB:ScanCDMViewers()
                 MB:RebuildAllBars()
             end
+            if mods.cdmBeautify then Layout:RefreshAll() end
             if ns.Visibility then ns.Visibility:UpdateAll() end
         end)
     end
@@ -175,6 +223,7 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
             C_Timer.After(0.5, function()
                 MB:ScanCDMViewers()
                 MB:RebuildAllBars()
+                if mods.cdmBeautify then Layout:RefreshAll() end
             end)
         end
     end
@@ -210,11 +259,16 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         end
     end
 
-    if mods.monitorBars then
+    if mods.monitorBars or mods.cdmBeautify then
         eventHandlers["UNIT_AURA"] = function(unit)
-            MB:OnAuraUpdate()
+            if mods.monitorBars then MB:OnAuraUpdate() end
+            if unit == "player" and mods.cdmBeautify then
+                RequestTrackedBarsRefresh()
+            end
         end
+    end
 
+    if mods.monitorBars then
         eventHandlers["SPELL_UPDATE_CHARGES"] = function()
             MB:OnChargeUpdate()
         end
@@ -251,13 +305,6 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
     if ns.Visibility then
         ns.Visibility:Initialize()
-    end
-
-    if mods.monitorBars then
-        C_Timer.After(1, function()
-            MB:ScanCDMViewers()
-            MB:InitAllBars()
-        end)
     end
 
     print("|cff00ccff[CDFlow]|r " .. format(L.loaded, L.slashHelp))

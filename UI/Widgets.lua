@@ -7,6 +7,13 @@ local LSM = LibStub("LibSharedMedia-3.0", true)
 
 ns.UI = {}
 
+-- 行内锚点（左/中/右）
+ns.UI.ROW_ANCHOR_ITEMS = {
+    ["LEFT"]   = L.anchorLeft,
+    ["CENTER"] = L.anchorCenter,
+    ["RIGHT"]  = L.anchorRight,
+}
+
 -- 重要技能 / 效能技能增长方向
 ns.UI.CD_GROW_ITEMS = {
     ["TOP"]    = L.dirGrowDown,
@@ -20,8 +27,9 @@ ns.UI.BUFF_GROW_ITEMS = {
 }
 
 ns.UI.TRACKED_BARS_DIR_ITEMS = {
-    ["TOP"]    = L.dirTop,
-    ["BOTTOM"] = L.dirBottom,
+    ["CENTER"] = L.dirTbCenter,
+    ["TOP"]    = L.dirTbTop,
+    ["BOTTOM"] = L.dirTbBottom,
 }
 
 ns.UI.ICON_POS_ITEMS = {

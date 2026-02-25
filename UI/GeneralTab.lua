@@ -47,17 +47,6 @@ function ns.BuildGeneralTab(scroll)
     moduleGroup:AddChild(descMB)
 
     if mods.cdmBeautify then
-        local tipGroup = AceGUI:Create("InlineGroup")
-        tipGroup:SetTitle("|cffff8800Tips|r")
-        tipGroup:SetFullWidth(true)
-        tipGroup:SetLayout("Flow")
-        scroll:AddChild(tipGroup)
-
-        local tipLabel = AceGUI:Create("Label")
-        tipLabel:SetText("|cffff8800" .. L.overviewTip .. "|r")
-        tipLabel:SetFullWidth(true)
-        tipLabel:SetFontObject(GameFontHighlightSmall)
-        tipGroup:AddChild(tipLabel)
 
         UI.AddHeading(scroll, L.generalSettings)
 

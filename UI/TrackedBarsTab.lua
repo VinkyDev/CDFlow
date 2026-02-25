@@ -83,18 +83,22 @@ function ns.BuildTrackedBarsTab(scroll)
     UI.AddHeading(scroll, L.tbLayout)
 
     UI.AddDropdown(scroll, L.trackedBarsGrowDir, UI.TRACKED_BARS_DIR_ITEMS,
-        { "TOP", "BOTTOM" },
-        function() return cfg.growDir end,
-        function(v) cfg.growDir = v end)
+        { "CENTER", "TOP", "BOTTOM" },
+        function() return cfg.growDir or "CENTER" end,
+        function(v) cfg.growDir = v Layout:RefreshAll() end)
 
     UI.AddSlider(scroll, L.tbBarHeight, 10, 60, 1,
         function() return cfg.barHeight end,
-        function(v) cfg.barHeight = v end)
+        function(v) cfg.barHeight = v Layout:RefreshAll() end)
+
+    UI.AddSlider(scroll, L.tbSpacing, 0, 20, 1,
+        function() return cfg.spacing ~= nil and cfg.spacing or 0 end,
+        function(v) cfg.spacing = v Layout:RefreshAll() end)
 
     UI.AddDropdown(scroll, L.tbIconPosition, UI.ICON_POS_ITEMS,
         { "LEFT", "RIGHT", "HIDDEN" },
         function() return cfg.iconPosition end,
-        function(v) cfg.iconPosition = v end)
+        function(v) cfg.iconPosition = v Layout:RefreshAll() end)
 
     -- ---- 外观区块 ----
     UI.AddHeading(scroll, L.tbAppearance)
