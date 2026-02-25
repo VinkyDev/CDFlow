@@ -10,10 +10,11 @@ local function GetTabList()
     }
     local mods = ns.db and ns.db.modules
     if not mods or mods.cdmBeautify then
-        tabs[#tabs + 1] = { value = "essential", text = L.essential }
-        tabs[#tabs + 1] = { value = "utility",   text = L.utility }
-        tabs[#tabs + 1] = { value = "buffs",     text = L.buffs }
-        tabs[#tabs + 1] = { value = "highlight", text = L.highlight }
+        tabs[#tabs + 1] = { value = "essential",   text = L.essential }
+        tabs[#tabs + 1] = { value = "utility",     text = L.utility }
+        tabs[#tabs + 1] = { value = "buffs",       text = L.buffs }
+        tabs[#tabs + 1] = { value = "trackedBars", text = L.trackedBars }
+        tabs[#tabs + 1] = { value = "highlight",   text = L.highlight }
     end
     if not mods or mods.monitorBars then
         tabs[#tabs + 1] = { value = "monitorBars", text = L.monitorBars }
@@ -39,6 +40,10 @@ local function OnTabSelected(container, _, group)
         ns.BuildViewerTab(scroll, "utility", true, false)
     elseif group == "buffs" then
         ns.BuildViewerTab(scroll, "buffs", false, false)
+    elseif group == "trackedBars" then
+        if ns.BuildTrackedBarsTab then
+            ns.BuildTrackedBarsTab(scroll)
+        end
     elseif group == "highlight" then
         ns.BuildHighlightTab(scroll)
     elseif group == "monitorBars" then

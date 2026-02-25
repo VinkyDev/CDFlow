@@ -76,8 +76,26 @@ local function MigrateOldData(profileData)
         end
         profileData.stack = nil
     end
-    if profileData.trackedBarsGrowDir ~= "TOP" and profileData.trackedBarsGrowDir ~= "BOTTOM" then
-        profileData.trackedBarsGrowDir = ns.defaults.trackedBarsGrowDir
+    -- 旧 trackedBarsGrowDir 迁移到 trackedBars.growDir
+    if profileData.trackedBarsGrowDir ~= nil then
+        if not profileData.trackedBars then
+            profileData.trackedBars = DeepCopy(ns.defaults.trackedBars)
+        end
+        if profileData.trackedBarsGrowDir == "TOP" or profileData.trackedBarsGrowDir == "BOTTOM" then
+            profileData.trackedBars.growDir = profileData.trackedBarsGrowDir
+        end
+        profileData.trackedBarsGrowDir = nil
+    end
+    -- 确保 trackedBars 各字段完整
+    if not profileData.trackedBars then
+        profileData.trackedBars = DeepCopy(ns.defaults.trackedBars)
+    else
+        local defaults = ns.defaults.trackedBars
+        for k, v in pairs(defaults) do
+            if profileData.trackedBars[k] == nil then
+                profileData.trackedBars[k] = DeepCopy(v)
+            end
+        end
     end
     MigrateOldBarFields(profileData)
 end

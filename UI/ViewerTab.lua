@@ -244,10 +244,6 @@ function ns.BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRow)
             { "CENTER", "DEFAULT" },
             function() return cfg.growDir end,
             function(v) cfg.growDir = v end)
-        UI.AddDropdown(scroll, L.trackedBarsGrowDir, UI.TRACKED_BARS_DIR_ITEMS,
-            { "TOP", "BOTTOM" },
-            function() return ns.db.trackedBarsGrowDir end,
-            function(v) ns.db.trackedBarsGrowDir = v end)
     else
         UI.AddDropdown(scroll, L.growDir, UI.CD_GROW_ITEMS,
             { "TOP", "BOTTOM" },

@@ -33,5 +33,6 @@ UI\GeneralTab.lua
 UI\ViewerTab.lua
 UI\HighlightTab.lua
 UI\ProfilesTab.lua
+UI\TrackedBarsTab.lua
 UI\MonitorBarsTab.lua
 UI\Settings.lua

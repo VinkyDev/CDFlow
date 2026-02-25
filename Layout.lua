@@ -19,6 +19,7 @@ ns.Layout = Layout
 
 local Style = ns.Style
 local floor = math.floor
+local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
 local VIEWER_KEY = {
     EssentialCooldownViewer = "essential",
@@ -414,6 +415,196 @@ function Layout:RefreshAll()
 end
 
 ------------------------------------------------------
+-- 追踪状态栏（Tracked Bars）样式应用
+------------------------------------------------------
+
+local _trackedBarHooked = {}
+
+local function ResolveFontPath(fontName)
+    if LSM and fontName and fontName ~= "" and fontName ~= "默认" then
+        local path = LSM:Fetch("font", fontName)
+        if path then return path end
+    end
+    return ns.ResolveFontPath and ns.ResolveFontPath(fontName) or GameFontNormal:GetFont()
+end
+
+local function ResolveOutline(outline)
+    if outline == "NONE" then return "" end
+    return outline or "OUTLINE"
+end
+
+local function ApplyTrackedBarStyle(frame, cfg)
+    if not frame then return end
+
+    local bar = frame.Bar
+    local iconFrame = frame.Icon
+
+    -- 确保 fd 表存在
+    local fd = _trackedBarHooked[frame]
+    if not fd then
+        fd = {}
+        _trackedBarHooked[frame] = fd
+    end
+
+    -- 屏蔽 DebuffBorder 红框（DebuffBorder 直接挂在 frame 上）
+    if frame.DebuffBorder then
+        local suppress = ns.db and ns.db.suppressDebuffBorder
+        local targetAlpha = suppress and 0 or 1
+        if frame.DebuffBorder:GetAlpha() ~= targetAlpha then
+            frame.DebuffBorder:SetAlpha(targetAlpha)
+        end
+        if not fd.debuffBorderHooked then
+            fd.debuffBorderHooked = true
+            hooksecurefunc(frame.DebuffBorder, "Show", function(self)
+                if ns.db and ns.db.suppressDebuffBorder then
+                    self:SetAlpha(0)
+                end
+            end)
+            if frame.DebuffBorder.UpdateFromAuraData then
+                hooksecurefunc(frame.DebuffBorder, "UpdateFromAuraData", function(self)
+                    if ns.db and ns.db.suppressDebuffBorder then
+                        self:SetAlpha(0)
+                    end
+                end)
+            end
+        end
+    end
+
+    -- 条纹理与颜色
+    if bar then
+        local barTexture = (LSM and LSM:Fetch("statusbar", cfg.barTexture))
+            or "Interface\\TargetingFrame\\UI-StatusBar"
+
+        bar:SetStatusBarTexture(barTexture)
+        local bc = cfg.barColor
+        bar:SetStatusBarColor(bc[1] or 0.4, bc[2] or 0.6, bc[3] or 0.9, bc[4] or 1.0)
+
+        -- 背景
+        if not fd.barBackground then
+            fd.barBackground = bar:CreateTexture(nil, "BACKGROUND", nil, -1)
+        end
+        fd.barBackground:ClearAllPoints()
+        fd.barBackground:SetAllPoints(bar)
+        fd.barBackground:SetTexture(barTexture)
+        local bg = cfg.bgColor
+        fd.barBackground:SetVertexColor(bg[1] or 0.1, bg[2] or 0.1, bg[3] or 0.1, bg[4] or 0.8)
+
+        -- 隐藏官方背景纹理
+        if bar.BarBG then
+            bar.BarBG:Hide()
+            bar.BarBG:SetAlpha(0)
+        end
+
+        -- 名称文字
+        local nameText = bar.Name
+        if nameText then
+            if cfg.showName then
+                nameText:Show()
+                nameText:SetAlpha(1)
+                local fontPath = ResolveFontPath(cfg.nameFontName)
+                nameText:SetFont(fontPath, cfg.nameFontSize or 12, ResolveOutline(cfg.nameOutline))
+                local nc = cfg.nameColor
+                nameText:SetTextColor(nc[1] or 1, nc[2] or 1, nc[3] or 1, nc[4] or 1)
+                nameText:SetShadowOffset(0, 0)
+            else
+                nameText:Hide()
+                nameText:SetAlpha(0)
+            end
+
+            -- 防止 Blizzard 重新显示时绕过我们的隐藏
+            if not fd.nameHooked then
+                fd.nameHooked = true
+                hooksecurefunc(nameText, "Show", function(self)
+                    if not cfg.showName then
+                        self:Hide()
+                        self:SetAlpha(0)
+                    end
+                end)
+            end
+        end
+
+        -- 时长文字
+        local durationText = bar.Duration
+        if durationText then
+            if cfg.showDuration then
+                durationText:Show()
+                durationText:SetAlpha(1)
+                local fontPath = ResolveFontPath(cfg.durationFontName)
+                durationText:SetFont(fontPath, cfg.durationFontSize or 12, ResolveOutline(cfg.durationOutline))
+                local dc = cfg.durationColor
+                durationText:SetTextColor(dc[1] or 1, dc[2] or 1, dc[3] or 1, dc[4] or 1)
+                durationText:SetShadowOffset(0, 0)
+            else
+                durationText:Hide()
+                durationText:SetAlpha(0)
+            end
+
+            if not fd.durationHooked then
+                fd.durationHooked = true
+                hooksecurefunc(durationText, "Show", function(self)
+                    if not cfg.showDuration then
+                        self:Hide()
+                        self:SetAlpha(0)
+                    end
+                end)
+            end
+        end
+
+        -- 调整条的锚点以适应图标位置
+        local iconPos = cfg.iconPosition or "LEFT"
+        if iconPos == "HIDDEN" then
+            bar:ClearAllPoints()
+            bar:SetPoint("LEFT", frame, "LEFT", 0, 0)
+            bar:SetPoint("RIGHT", frame, "RIGHT", 0, 0)
+        elseif iconPos == "RIGHT" then
+            bar:ClearAllPoints()
+            bar:SetPoint("LEFT", frame, "LEFT", 0, 0)
+            bar:SetPoint("RIGHT", iconFrame or frame, iconFrame and "LEFT" or "RIGHT", 0, 0)
+        else -- LEFT（默认）
+            bar:ClearAllPoints()
+            bar:SetPoint("LEFT", iconFrame or frame, iconFrame and "RIGHT" or "LEFT", 0, 0)
+            bar:SetPoint("RIGHT", frame, "RIGHT", 0, 0)
+        end
+    end
+
+    -- 图标位置
+    if iconFrame then
+        local iconPos = cfg.iconPosition or "LEFT"
+        local barHeight = cfg.barHeight or 20
+        if iconPos == "HIDDEN" then
+            iconFrame:Hide()
+        else
+            iconFrame:Show()
+            iconFrame:SetSize(barHeight, barHeight)
+            iconFrame:ClearAllPoints()
+            if iconPos == "RIGHT" then
+                iconFrame:SetPoint("RIGHT", frame, "RIGHT", 0, 0)
+            else
+                iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
+            end
+        end
+
+        -- 钩子：防止 Blizzard 重新显示图标
+        if not fd.iconShowHooked then
+            fd.iconShowHooked = true
+            hooksecurefunc(iconFrame, "Show", function(self)
+                if (cfg.iconPosition or "LEFT") == "HIDDEN" then
+                    self:Hide()
+                end
+            end)
+        end
+    end
+
+    -- 钩子：SetBarContent 后重新应用（防止官方刷新覆盖）
+    if not fd.barContentHooked and frame.SetBarContent then
+        fd.barContentHooked = true
+        hooksecurefunc(frame, "SetBarContent", function()
+            ApplyTrackedBarStyle(frame, cfg)
+        end)
+    end
+end
+
+------------------------------------------------------
 -- 追踪状态栏（Tracked Bars）布局
 ------------------------------------------------------
 function Layout:RefreshTrackedBars()
@@ -425,11 +616,20 @@ function Layout:RefreshTrackedBars()
     local bars = CollectTrackedBars(viewer)
     if #bars == 0 then return end
 
-    local barHeight = bars[1] and bars[1]:GetHeight()
-    if not barHeight or barHeight <= 0 then return end
+    local cfg = (ns.db and ns.db.trackedBars) or ns.defaults.trackedBars
+
+    -- 应用外观样式
+    for _, bar in ipairs(bars) do
+        ApplyTrackedBarStyle(bar, cfg)
+    end
+
+    local barHeight = (cfg.barHeight and cfg.barHeight > 0) and cfg.barHeight
+        or (bars[1] and bars[1]:GetHeight())
+        or 20
+    if barHeight <= 0 then return end
 
     local spacing = viewer.childYPadding or 0
-    local growFromBottom = (ns.db.trackedBarsGrowDir ~= "TOP")
+    local growFromBottom = (cfg.growDir ~= "TOP")
 
     for index, bar in ipairs(bars) do
         local offset = index - 1

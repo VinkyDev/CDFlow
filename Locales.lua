@@ -61,9 +61,26 @@ local S = {
     -- 布局方向选项（增益效果）
     dirBuffCenter   = { "从中间增长",               "Grow from Center" },
     dirBuffDefault  = { "固定位置（系统默认）",     "Fixed (System Default)" },
-    -- 保留（追踪状态栏方向仍在使用）
+    -- 追踪状态栏方向
     dirTop          = { "顶部向下",     "Top to Bottom" },
     dirBottom       = { "底部向上",     "Bottom to Top" },
+
+    -- 追踪状态栏 Tab
+    trackedBars          = { "追踪状态栏",       "Tracked Bars" },
+    tbLayout             = { "布局",             "Layout" },
+    tbAppearance         = { "外观",             "Appearance" },
+    tbBarHeight          = { "条高度",           "Bar Height" },
+    tbIconPosition       = { "图标位置",         "Icon Position" },
+    tbIconLeft           = { "左侧",             "Left" },
+    tbIconRight          = { "右侧",             "Right" },
+    tbIconHidden         = { "隐藏图标",         "Hide Icon" },
+    tbBarTexture         = { "材质",              "Texture" },
+    tbBarColor           = { "条前景色",         "Bar Color" },
+    tbBgColor            = { "背景颜色",         "Background Color" },
+    tbNameText           = { "名称文字",         "Name Text" },
+    tbDurationText       = { "时长文字",         "Duration Text" },
+    tbShowName           = { "显示技能名称",     "Show Spell Name" },
+    tbShowDuration       = { "显示剩余时长",     "Show Duration" },
 
     -- 描边选项
     outNone         = { "无",           "None" },

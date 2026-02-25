@@ -12,7 +12,26 @@ ns.defaults = {
     iconZoom    = 0.08,
     borderSize  = 1,
     suppressDebuffBorder = true,
-    trackedBarsGrowDir = "BOTTOM",
+
+    -- 追踪状态栏
+    trackedBars = {
+        growDir          = "BOTTOM",
+        barHeight        = 20,
+        iconPosition     = "LEFT",
+        barTexture       = "Solid",
+        barColor         = { 0.4, 0.6, 0.9, 1.0 },
+        bgColor          = { 0.1, 0.1, 0.1, 0.8 },
+        showName         = true,
+        nameFontSize     = 12,
+        nameFontName     = "默认",
+        nameOutline      = "OUTLINE",
+        nameColor        = { 1, 1, 1, 1 },
+        showDuration     = true,
+        durationFontSize = 12,
+        durationFontName = "默认",
+        durationOutline  = "OUTLINE",
+        durationColor    = { 1, 1, 1, 1 },
+    },
 
     -- 核心技能查看器
     essential = {

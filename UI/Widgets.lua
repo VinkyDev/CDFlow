@@ -24,6 +24,12 @@ ns.UI.TRACKED_BARS_DIR_ITEMS = {
     ["BOTTOM"] = L.dirBottom,
 }
 
+ns.UI.ICON_POS_ITEMS = {
+    ["LEFT"]   = L.tbIconLeft,
+    ["RIGHT"]  = L.tbIconRight,
+    ["HIDDEN"] = L.tbIconHidden,
+}
+
 ns.UI.OUTLINE_ITEMS = {
     ["NONE"]         = L.outNone,
     ["OUTLINE"]      = L.outOutline,
