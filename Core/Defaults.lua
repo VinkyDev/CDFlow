@@ -110,14 +110,12 @@ ns.defaults = {
     },
 
     buffs = {
-        enabled     = true,
-        growDir     = "CENTER",
-        iconsPerRow = 0,
-        iconWidth   = 40,
-        iconHeight  = 40,
-        spacingX    = 2,
-        spacingY    = 2,
-        rowOverrides = {},
+        enabled    = true,
+        growDir    = "CENTER",
+        iconWidth  = 40,
+        iconHeight = 40,
+        spacingX   = 2,
+        spacingY   = 2,
         stack = {
             enabled  = false,
             fontSize = 12,

@@ -165,8 +165,6 @@ end
 function Layout:RefreshBuffViewer(viewer, cfg)
     local db = ns.db
     local w, h = cfg.iconWidth, cfg.iconHeight
-    local ov = cfg.rowOverrides[1]
-    if ov then w, h = ov.width or w, ov.height or h end
 
     local isH = (viewer.isHorizontal ~= false)
     local iconDir = (viewer.iconDirection == 1) and 1 or -1
@@ -225,19 +223,10 @@ function Layout:RefreshBuffViewer(viewer, cfg)
     end
 
     -- 定位
-    local limit = cfg.iconsPerRow or 0
-    if limit > 0 then
-        if isH then
-            self:LayoutBuffWrappedH(viewer, visible, w, h, cfg, iconDir, doCenter, limit)
-        else
-            self:LayoutBuffWrappedV(viewer, visible, w, h, cfg, iconDir, doCenter, limit)
-        end
+    if isH then
+        self:LayoutBuffH(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
     else
-        if isH then
-            self:LayoutBuffH(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
-        else
-            self:LayoutBuffV(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
-        end
+        self:LayoutBuffV(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
     end
 end
 
@@ -278,55 +267,6 @@ function Layout:LayoutBuffV(viewer, visible, slotOf, total, w, h, cfg, iconDir, 
             local y = -(slotOf[icon]) * (h + cfg.spacingY) * vertDir
             SetPointCached(icon, anchor, viewer, 0, y)
         end
-    end
-end
-
--- Buff 水平换行布局（iconsPerRow > 0）
-function Layout:LayoutBuffWrappedH(viewer, visible, w, h, cfg, iconDir, doCenter, limit)
-    local anchor = "TOP" .. ((iconDir == 1) and "LEFT" or "RIGHT")
-    local rows = BuildRows(limit, visible)
-    local refTotalW = limit * (w + cfg.spacingX) - cfg.spacingX
-
-    local yAccum = 0
-    for _, row in ipairs(rows) do
-        local count = #row
-        local rowContentW = count * (w + cfg.spacingX) - cfg.spacingX
-        local startX = 0
-        if doCenter and rowContentW < refTotalW then
-            startX = ((refTotalW - rowContentW) / 2) * iconDir
-        end
-
-        for i, icon in ipairs(row) do
-            local x = startX + (i - 1) * (w + cfg.spacingX) * iconDir
-            SetPointCached(icon, anchor, viewer, x, -yAccum)
-        end
-
-        yAccum = yAccum + h + cfg.spacingY
-    end
-end
-
--- Buff 垂直换行布局（iconsPerRow > 0）
-function Layout:LayoutBuffWrappedV(viewer, visible, w, h, cfg, iconDir, doCenter, limit)
-    local vertDir = -iconDir
-    local anchor = (iconDir == 1) and "BOTTOMLEFT" or "TOPLEFT"
-    local cols = BuildRows(limit, visible)
-    local refTotalH = limit * (h + cfg.spacingY) - cfg.spacingY
-
-    local xAccum = 0
-    for _, col in ipairs(cols) do
-        local count = #col
-        local colContentH = count * (h + cfg.spacingY) - cfg.spacingY
-        local startY = 0
-        if doCenter and colContentH < refTotalH then
-            startY = -((refTotalH - colContentH) / 2) * vertDir
-        end
-
-        for i, icon in ipairs(col) do
-            local y = startY - (i - 1) * (h + cfg.spacingY) * vertDir
-            SetPointCached(icon, anchor, viewer, xAccum, y)
-        end
-
-        xAccum = xAccum + w + cfg.spacingX
     end
 end
 

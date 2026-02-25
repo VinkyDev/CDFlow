@@ -282,11 +282,13 @@ function ns.BuildViewerTab(scroll, viewerKey, showPerRow, allowUnlimitedPerRow)
         function() return cfg.spacingX end,
         function(v) cfg.spacingX = v end)
 
-    UI.AddSlider(scroll, L.spacingY, 0, 20, 1,
-        function() return cfg.spacingY end,
-        function(v) cfg.spacingY = v end)
+    if viewerKey ~= "buffs" then
+        UI.AddSlider(scroll, L.spacingY, 0, 20, 1,
+            function() return cfg.spacingY end,
+            function(v) cfg.spacingY = v end)
 
-    BuildRowOverrides(scroll, viewerKey)
+        BuildRowOverrides(scroll, viewerKey)
+    end
 
     if cfg.stack then
         BuildTextOverlaySection(scroll, L.stackText, cfg.stack, {

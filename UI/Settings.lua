@@ -38,7 +38,7 @@ local function OnTabSelected(container, _, group)
     elseif group == "utility" then
         ns.BuildViewerTab(scroll, "utility", true, false)
     elseif group == "buffs" then
-        ns.BuildViewerTab(scroll, "buffs", true, true)
+        ns.BuildViewerTab(scroll, "buffs", false, false)
     elseif group == "highlight" then
         ns.BuildHighlightTab(scroll)
     elseif group == "monitorBars" then
