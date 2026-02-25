@@ -7,9 +7,16 @@ local LSM = LibStub("LibSharedMedia-3.0", true)
 
 ns.UI = {}
 
-ns.UI.DIR_ITEMS = {
-    ["CENTER"]  = L.dirCenter,
-    ["DEFAULT"] = L.dirDefault,
+-- 重要技能 / 效能技能增长方向
+ns.UI.CD_GROW_ITEMS = {
+    ["TOP"]    = L.dirGrowDown,
+    ["BOTTOM"] = L.dirGrowUp,
+}
+
+-- 增益效果增长方向
+ns.UI.BUFF_GROW_ITEMS = {
+    ["CENTER"]  = L.dirBuffCenter,
+    ["DEFAULT"] = L.dirBuffDefault,
 }
 
 ns.UI.TRACKED_BARS_DIR_ITEMS = {

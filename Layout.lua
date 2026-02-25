@@ -3,12 +3,15 @@ local _, ns = ...
 ------------------------------------------------------
 -- 布局模块
 --
--- 技能查看器（Essential/Utility）：多行布局 + 行居中
--- 增益查看器（Buffs）：单行/列 + 固定槽位或动态居中
---
+-- 技能查看器（Essential/Utility）：多行布局 + 行内始终水平居中
 -- growDir:
---   "CENTER"  → 居中（默认）
---   "DEFAULT" → 保持游戏默认对齐
+--   "TOP"    → 从顶部向下增长（默认）
+--   "BOTTOM" → 从底部向上增长
+--
+-- 增益查看器（Buffs）：单行/列 + 固定槽位或动态居中
+-- growDir:
+--   "CENTER"  → 从中间增长（动态居中）
+--   "DEFAULT" → 固定位置（系统默认）
 ------------------------------------------------------
 
 local Layout = {}
@@ -329,7 +332,10 @@ end
 
 ------------------------------------------------------
 -- 技能查看器（Essential / Utility）
--- 多行布局 + 行尺寸覆盖
+-- 多行布局 + 行尺寸覆盖 + 行内始终水平居中
+-- growDir:
+--   "TOP"    → 从顶部向下增长（anchor = TOPLEFT/TOPRIGHT）
+--   "BOTTOM" → 从底部向上增长（anchor = BOTTOMLEFT/BOTTOMRIGHT）
 ------------------------------------------------------
 function Layout:RefreshCDViewer(viewer, cfg)
     local allIcons = CollectAllIcons(viewer)
@@ -373,18 +379,25 @@ function Layout:RefreshCDViewer(viewer, cfg)
         end
     end
 
-    local doCenter = (cfg.growDir == "CENTER")
+    local growDir = cfg.growDir or "TOP"
 
     if isH then
-        self:LayoutCDH(viewer, rows, rowInfos, cfg, iconDir, limit, doCenter)
+        self:LayoutCDH(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
     else
-        self:LayoutCDV(viewer, rows, rowInfos, cfg, iconDir, limit, doCenter)
+        self:LayoutCDV(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
     end
 end
 
--- 技能水平布局：行内左右排列，行间上下堆叠
-function Layout:LayoutCDH(viewer, rows, rowInfos, cfg, iconDir, limit, doCenter)
-    local anchor = "TOP" .. ((iconDir == 1) and "LEFT" or "RIGHT")
+------------------------------------------------------
+-- 技能水平布局
+-- growDir "TOP"    → anchor=TOPLEFT,  行从上往下叠（yOffset 递减）
+-- growDir "BOTTOM" → anchor=BOTTOMLEFT, 行从下往上叠（yOffset 递增）
+-- 行内水平：始终以满行宽度为基准居中
+------------------------------------------------------
+function Layout:LayoutCDH(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
+    local fromBottom = (growDir == "BOTTOM")
+    local rowOffsetMod = fromBottom and 1 or -1
+    local rowAnchor = (fromBottom and "BOTTOM" or "TOP") .. ((iconDir == 1) and "LEFT" or "RIGHT")
 
     -- 参考宽度：第一行满行时的总宽度
     local refW = rowInfos[1].w
@@ -396,25 +409,36 @@ function Layout:LayoutCDH(viewer, rows, rowInfos, cfg, iconDir, limit, doCenter)
         local count = #row
         local rowContentW = count * (w + cfg.spacingX) - cfg.spacingX
 
-        -- 居中偏移：以第一行总宽度为基准
-        local startX = 0
-        if doCenter and rowContentW < refTotalW then
-            startX = ((refTotalW - rowContentW) / 2) * iconDir
-        end
+        -- 行内始终水平居中（以满行宽度为基准）
+        local startX = ((refTotalW - rowContentW) / 2) * iconDir
 
+        local yOffset = yAccum * rowOffsetMod
         for i, icon in ipairs(row) do
             local x = startX + (i - 1) * (w + cfg.spacingX) * iconDir
-            SetPointCached(icon, anchor, viewer, x, -yAccum)
+            SetPointCached(icon, rowAnchor, viewer, x, yOffset)
         end
 
         yAccum = yAccum + h + cfg.spacingY
     end
 end
 
--- 技能垂直布局：列内上下排列，列间左右堆叠
-function Layout:LayoutCDV(viewer, rows, rowInfos, cfg, iconDir, limit, doCenter)
-    local vertDir = -iconDir
-    local anchor = (iconDir == 1) and "BOTTOMLEFT" or "TOPLEFT"
+------------------------------------------------------
+-- 技能垂直布局
+-- growDir "TOP"    → anchor=BOTTOMLEFT, 列从左往右叠（xOffset 递增）
+-- growDir "BOTTOM" → anchor=BOTTOMRIGHT, 列从右往左叠（xOffset 递减）
+-- 列内垂直：始终以满列高度为基准居中
+------------------------------------------------------
+function Layout:LayoutCDV(viewer, rows, rowInfos, cfg, iconDir, limit, growDir)
+    local fromBottom = (growDir == "BOTTOM")
+    -- 垂直布局中，"BOTTOM"意味着列从右向左增长
+    local colOffsetMod = fromBottom and -1 or 1
+    local iconVertDir = -iconDir
+
+    -- anchor 的垂直分量由 iconDir 决定（和原逻辑一致）
+    -- 水平分量由 growDir 决定
+    local vertPart = (iconDir == 1) and "BOTTOM" or "TOP"
+    local horizPart = fromBottom and "RIGHT" or "LEFT"
+    local colAnchor = vertPart .. horizPart
 
     -- 参考高度：第一列满列时的总高度
     local refH = rowInfos[1].h
@@ -426,15 +450,13 @@ function Layout:LayoutCDV(viewer, rows, rowInfos, cfg, iconDir, limit, doCenter)
         local count = #row
         local colContentH = count * (h + cfg.spacingY) - cfg.spacingY
 
-        -- 居中偏移：以第一列总高度为基准
-        local startY = 0
-        if doCenter and colContentH < refTotalH then
-            startY = -((refTotalH - colContentH) / 2) * vertDir
-        end
+        -- 列内始终垂直居中（以满列高度为基准）
+        local startY = -((refTotalH - colContentH) / 2) * iconVertDir
 
+        local xOffset = xAccum * colOffsetMod
         for i, icon in ipairs(row) do
-            local y = startY - (i - 1) * (h + cfg.spacingY) * vertDir
-            SetPointCached(icon, anchor, viewer, xAccum, y)
+            local y = startY - (i - 1) * (h + cfg.spacingY) * iconVertDir
+            SetPointCached(icon, colAnchor, viewer, xOffset, y)
         end
 
         xAccum = xAccum + w + cfg.spacingX

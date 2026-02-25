@@ -32,13 +32,19 @@ local function MigrateOldBarFields(db)
     end
 end
 
-local function MigrateOldViewerFields(cfg)
+local function MigrateOldViewerFields(cfg, isCDViewer)
     if not cfg then return end
     cfg.enabled = true
     if cfg.showKeybind == true and cfg.keybind then
         cfg.keybind.enabled = true
     end
     cfg.showKeybind = nil
+    -- 旧版 growDir 值迁移：Essential/Utility 的 "CENTER"/"DEFAULT" 统一迁移为 "TOP"
+    if isCDViewer then
+        if cfg.growDir ~= "TOP" and cfg.growDir ~= "BOTTOM" then
+            cfg.growDir = "TOP"
+        end
+    end
     if cfg.stack then
         if type(cfg.stack.fontName) ~= "string" then cfg.stack.fontName = "默认" end
         if type(cfg.stack.textColor) ~= "table" then cfg.stack.textColor = { 1, 1, 1, 1 } end
@@ -57,9 +63,10 @@ local function MigrateOldViewerFields(cfg)
 end
 
 local function MigrateOldData(profileData)
-    for _, key in ipairs({ "essential", "utility", "buffs" }) do
-        MigrateOldViewerFields(profileData[key])
+    for _, key in ipairs({ "essential", "utility" }) do
+        MigrateOldViewerFields(profileData[key], true)
     end
+    MigrateOldViewerFields(profileData["buffs"], false)
     if profileData.stack and type(profileData.stack) == "table" then
         local old = profileData.stack
         for _, key in ipairs({ "essential", "utility", "buffs" }) do

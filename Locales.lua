@@ -55,9 +55,13 @@ local S = {
     manualListTitle = { "当前覆盖列表", "Current Overrides" },
     manualListHint  = { "无法自动识别或识别错误时，可按技能ID手动指定显示文本。", "Set display text by spell ID when auto-detection fails." },
 
-    -- 布局选项
-    dirDefault      = { "默认",         "Default" },
-    dirCenter       = { "居中",         "Center" },
+    -- 布局方向选项（重要技能 / 效能技能）
+    dirGrowDown     = { "向下增长",                 "Grow Down" },
+    dirGrowUp       = { "向上增长",                 "Grow Up" },
+    -- 布局方向选项（增益效果）
+    dirBuffCenter   = { "从中间增长",               "Grow from Center" },
+    dirBuffDefault  = { "固定位置（系统默认）",     "Fixed (System Default)" },
+    -- 保留（追踪状态栏方向仍在使用）
     dirTop          = { "顶部向下",     "Top to Bottom" },
     dirBottom       = { "底部向上",     "Bottom to Top" },
 
@@ -129,7 +133,7 @@ local S = {
 
     -- 概览面板
     overviewTip     = { "修改技能美化配置后，建议进入编辑模式调整冷却管理器的「图标列数」和「图标填充」，让框选区域与实际显示区域吻合，以便在编辑模式中调整位置与更智能的自动对齐。",
-                        "After changing settings, enter Edit Mode and adjust the cooldown manager's Column Count and Icon Padding so the selection area matches the actual display, for better positioning and smarter auto-snapping." },
+    "After changing settings, enter Edit Mode and adjust the cooldown manager's Column Count and Icon Padding so the selection area matches the actual display, for better positioning and smarter auto-snapping." },
 
     -- 概览快捷操作
     openEditMode    = { "打开编辑模式",   "Open Edit Mode" },

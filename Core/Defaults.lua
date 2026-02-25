@@ -17,7 +17,7 @@ ns.defaults = {
     -- 核心技能查看器
     essential = {
         enabled     = true,
-        growDir     = "CENTER",
+        growDir     = "TOP",
         iconsPerRow = 8,
         iconWidth   = 52,
         iconHeight  = 52,
@@ -64,7 +64,7 @@ ns.defaults = {
 
     utility = {
         enabled     = true,
-        growDir     = "CENTER",
+        growDir     = "TOP",
         iconsPerRow = 6,
         iconWidth   = 30,
         iconHeight  = 30,
