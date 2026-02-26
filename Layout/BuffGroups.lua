@@ -37,7 +37,7 @@ local function ScreenToCenterOffset(frame)
 end
 
 ------------------------------------------------------
--- 多源技能ID候选列表（参考 Ayije_CDM SpellUtils.lua）
+-- 多源技能ID候选列表
 ------------------------------------------------------
 
 -- 收集图标帧所有可能的技能ID来源，优先级从高到低：
@@ -167,9 +167,6 @@ function Layout:GetGroupIdxForIcon(icon)
 end
 
 -- 临时放置：立即对分组内全部图标做正确排列 + 应用样式，无需等待全量刷新。
--- 参考 Ayije_CDM ComputeProvisionalMainBuffX：
---   其他帧需 IsShown()；触发帧（frame）无论是否已显示都强制包含，
---   因为 OnCooldownIDSet 在帧完全可见前就已触发。
 function Layout:ProvisionalPlaceInGroup(frame)
     if not frame then return end
     local gIdx = self:GetGroupIdxForIcon(frame)
@@ -297,7 +294,7 @@ local function SetupContainerDrag(container, groupIdx)
         UpdateContainerPosLabel(self, groups[groupIdx])
     end)
 
-    -- 滚轮微调（参考 MonitorBars/Bars.lua）
+    -- 滚轮微调
     -- 默认=垂直，Shift=水平，Ctrl=大步进10px
     container:SetScript("OnMouseWheel", function(self, delta)
         if InCombatLockdown() then return end

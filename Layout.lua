@@ -114,7 +114,7 @@ local function SetPointCached(icon, anchor, viewer, x, y)
 end
 
 ------------------------------------------------------
--- 同步 viewer 尺寸与实际图标边界框（参考 CooldownManagerCentered）
+-- 同步 viewer 尺寸与实际图标边界框
 -- 使编辑模式的圈选区域与实际显示区域一致
 ------------------------------------------------------
 local function UpdateViewerSizeToMatchIcons(viewer, icons)

@@ -111,7 +111,7 @@ local function RegisterHooks()
     end
 
     -- Mixin 级别钩子：在 OnCooldownIDSet / OnActiveStateChanged 触发时
-    -- 立即进行临时放置，消除自定义分组图标出现时的首帧延迟（参考 Ayije_CDM Main.lua）
+    -- 立即进行临时放置，消除自定义分组图标出现时的首帧延迟
     if CooldownViewerBuffIconItemMixin then
         if CooldownViewerBuffIconItemMixin.OnCooldownIDSet then
             hooksecurefunc(CooldownViewerBuffIconItemMixin, "OnCooldownIDSet", function(frame)
@@ -328,7 +328,7 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         end
     end
 
-    -- 物品监控事件（参考 Ayije_CDM Trinkets.lua 241-258 行）
+    -- 物品监控事件
     if IM then
         eventHandlers["BAG_UPDATE_COOLDOWN"] = function()
             IM:UpdateAllCooldowns()

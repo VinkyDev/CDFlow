@@ -1,5 +1,4 @@
 -- 增益自定义分组设置面板
--- 交互风格参考 MonitorBarsTab：选择器 + 单组配置，全局锁定，滚轮微调位置
 local _, ns = ...
 
 local L      = ns.L

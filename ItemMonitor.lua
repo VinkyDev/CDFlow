@@ -1,5 +1,4 @@
 -- 物品监控模块：追踪饰品/药水等物品冷却，显示为可拖拽图标容器
--- 冷却 API 参考 Ayije_CDM Racials.lua + Trinkets.lua
 local _, ns = ...
 
 local IM = {}
@@ -57,7 +56,7 @@ local function GetItemData(itemID)
 end
 
 ------------------------------------------------------
--- 冷却更新（参考 Ayije_CDM Racials.lua 340-347 行）
+-- 冷却更新
 ------------------------------------------------------
 
 local function UpdateItemCooldown(frame)
@@ -340,7 +339,7 @@ local function RebuildIconFrames()
 end
 
 ------------------------------------------------------
--- 容器拖拽/锁定（参考 BuffGroups SetupContainerDrag）
+-- 容器拖拽/锁定
 ------------------------------------------------------
 
 local function SetupContainerDrag()

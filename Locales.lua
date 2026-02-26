@@ -14,7 +14,7 @@ local S = {
     general         = { "概览",         "Overview" },
     essential       = { "重要技能",     "Essential" },
     utility         = { "效能技能",     "Utility" },
-    buffs           = { "增益效果",     "Buffs" },
+    buffs           = { "buff",         "Buffs" },
     stackText       = { "堆叠文字",     "Stack Text" },
     keybindText     = { "键位显示",     "Keybind" },
 
@@ -278,7 +278,7 @@ local S = {
     mbCondTarget        = { "有目标时显示",     "When Has Target" },
 
     -- 增益自定义分组
-    buffGroups          = { "自定义分组",       "Buff Groups" },
+    buffGroups          = { "buff分组",         "Buff Groups" },
     bgAddGroup          = { "新建分组",         "Add Group" },
     bgDeleteGroup       = { "删除此组",         "Delete Group" },
     bgGroupName         = { "分组名称",         "Group Name" },
