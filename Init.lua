@@ -308,7 +308,6 @@ local function RegisterCDMHooks()
                 RequestBuffViewerRefresh()
             end)
         end
-    end
 end
 
 local function RegisterTrackedBarsHooks()
