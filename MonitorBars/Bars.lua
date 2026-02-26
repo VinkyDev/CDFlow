@@ -816,10 +816,30 @@ function MB:RebuildCDMSuppressedSet()
     if not bars then return end
     for _, barCfg in ipairs(bars) do
         if barCfg.enabled and barCfg.hideFromCDM and barCfg.spellID > 0 then
-            local cdID = spellToCooldownID[barCfg.spellID]
+            local sid = barCfg.spellID
+            local cdID = spellToCooldownID[sid]
+            -- 若直接 spellID 未命中，尝试 base spell 变体（天赋替换/Override 时 ID 不同）
+            if not cdID and C_Spell and C_Spell.GetBaseSpell then
+                local baseID = C_Spell.GetBaseSpell(sid)
+                if baseID and baseID ~= sid then
+                    cdID = spellToCooldownID[baseID]
+                end
+            end
             if cdID then
                 suppressed[cdID] = true
             end
+        end
+    end
+    -- 通知 buff 居中循环 suppressed 集合已变更，驱动立即重排
+    ns.suppressedVersion = (ns.suppressedVersion or 0) + 1
+    if ns.Layout then
+        if ns.Layout.MarkBuffCenteringDirty then
+            ns.Layout:MarkBuffCenteringDirty()
+        end
+        -- 立即触发完整的 RefreshViewer，执行 SplitVisible 中的 alpha=0/偏移隐藏逻辑，
+        -- 而不仅仅依赖居中循环（居中循环只做位置计算，不应用 alpha 隐藏）
+        if ns.Layout.RequestBuffRefreshFromMB then
+            ns.Layout.RequestBuffRefreshFromMB()
         end
     end
 end

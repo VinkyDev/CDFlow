@@ -40,15 +40,31 @@ local function IsReady(viewer)
     return viewer:IsInitialized()
 end
 
--- 收集所有图标子帧（含隐藏），按 layoutIndex 排序
+-- 收集所有图标帧（含隐藏），按 layoutIndex 排序。
+-- 优先 itemFramePool：CENTER 模式下帧已 re-parent 到 UIParent，
+-- GetChildren() 找不到它们，itemFramePool 仍能枚举到。
 local function CollectAllIcons(viewer)
-    local all = {}
-    local children = { viewer:GetChildren() }
-    for _, child in ipairs(children) do
-        if child and child.Icon then
-            all[#all + 1] = child
+    local all  = {}
+    local seen = {}
+
+    if viewer.itemFramePool then
+        for frame in viewer.itemFramePool:EnumerateActive() do
+            if frame and frame.Icon then
+                seen[frame] = true
+                all[#all + 1] = frame
+            end
         end
     end
+
+    -- fallback：GetChildren 补充池外帧（兼容无 itemFramePool 情况）
+    if #all == 0 then
+        for _, child in ipairs({ viewer:GetChildren() }) do
+            if child and child.Icon and not seen[child] then
+                all[#all + 1] = child
+            end
+        end
+    end
+
     table.sort(all, function(a, b)
         return (a.layoutIndex or 0) < (b.layoutIndex or 0)
     end)
@@ -194,7 +210,10 @@ function Layout:RefreshBuffViewer(viewer, cfg)
                 Style:HideBuffGlow(icon)
             end
         end
-        -- 分组容器也可能有图标，但若全部不可见则无需处理
+        -- CENTER 模式下停止居中循环
+        if self.DisableBuffCentering then
+            self:DisableBuffCentering()
+        end
         return
     end
 
@@ -258,72 +277,55 @@ function Layout:RefreshBuffViewer(viewer, cfg)
         Style:ApplySwipeOverlay(icon)
     end
 
-    -- 主组定位（仅非分组图标）
-    if #mainVisible > 0 then
-        if isH then
-            self:LayoutBuffH(viewer, mainVisible, slotOf, w, h, cfg, iconDir, doCenter)
-        else
-            self:LayoutBuffV(viewer, mainVisible, slotOf, w, h, cfg, iconDir, doCenter)
+    -- 主组定位
+    if doCenter then
+        -- CENTER 模式：启用 OnUpdate 居中循环
+        -- 循环内部负责采集、检测变化、像素级重新定位
+        if self.EnableBuffCentering then
+            self:EnableBuffCentering(viewer, cfg)
         end
+    else
+        -- DEFAULT 模式：关闭居中循环（如切换自 CENTER 则还原父级），使用固定槽位
+        if self.DisableBuffCentering then
+            self:DisableBuffCentering()
+        end
+        if #mainVisible > 0 then
+            if isH then
+                self:LayoutBuffH(viewer, mainVisible, slotOf, w, h, cfg, iconDir)
+            else
+                self:LayoutBuffV(viewer, mainVisible, slotOf, w, h, cfg, iconDir)
+            end
+        end
+        -- 注意：buff viewer 不调用 UpdateViewerSizeToMatchIcons。
+        -- 调用 viewer:SetSize() 会触发 WoW 内部 RefreshLayout → 我们的钩子 → 再次 RefreshViewer，
+        -- 形成反馈循环：每次循环 TOPLEFT 因尺寸变化而偏移，图标最终偏离编辑模式配置的位置。
+        -- Essential/Utility viewer 不受影响（各自在 RefreshCDViewer 末尾独立调用）。
     end
 
-    -- 自定义分组定位
+    -- 自定义分组定位（无论哪种模式，分组总是独立定位）
     if hasGroups then
         self:RefreshBuffGroups(groupBuckets, w, h, cfg)
     end
-
-    -- 同步 viewer 尺寸与主组图标边界，使编辑模式圈选区域与实际显示一致
-    UpdateViewerSizeToMatchIcons(viewer, mainVisible)
 end
 
--- Buff 水平布局
--- CENTER 模式：以 viewer CENTER 为锚点动态居中，可见图标始终整体居中，
---             无需 total/missing，buff 出现/消失时整组平滑居中展开/收缩。
--- DEFAULT 模式：固定槽位，按 layoutIndex 排列。
-function Layout:LayoutBuffH(viewer, visible, slotOf, w, h, cfg, iconDir, doCenter)
-    if doCenter then
-        local n = #visible
-        local totalW = n * w + math.max(0, n - 1) * cfg.spacingX
-        -- 以 viewer CENTER 为原点：第一个图标中心偏移量
-        -- iconDir=1（左→右）：从 -(totalW-w)/2 开始向右排列
-        -- iconDir=-1（右→左）：从 +(totalW-w)/2 开始向左排列
-        local startX = -((totalW - w) / 2) * iconDir
-        for i, icon in ipairs(visible) do
-            local x = startX + (i - 1) * (w + cfg.spacingX) * iconDir
-            SetPointCached(icon, "CENTER", viewer, x, 0)
-        end
-    else
-        local anchor = "TOP" .. ((iconDir == 1) and "LEFT" or "RIGHT")
-        for _, icon in ipairs(visible) do
-            local x = slotOf[icon] * (w + cfg.spacingX) * iconDir
-            SetPointCached(icon, anchor, viewer, x, 0)
-        end
+-- Buff 水平布局（DEFAULT 模式：固定槽位，按 layoutIndex 排列）
+-- CENTER 模式由 Layout/BuffCentering.lua 的 OnUpdate 循环处理。
+function Layout:LayoutBuffH(viewer, visible, slotOf, w, h, cfg, iconDir)
+    local anchor = "TOP" .. ((iconDir == 1) and "LEFT" or "RIGHT")
+    for _, icon in ipairs(visible) do
+        local x = slotOf[icon] * (w + cfg.spacingX) * iconDir
+        SetPointCached(icon, anchor, viewer, x, 0)
     end
 end
 
--- Buff 垂直布局（方向取反，与 CMC 一致）
--- CENTER 模式：以 viewer CENTER 为锚点动态居中。
---   iconDir=1（上→下）：第一个图标中心在 +halfSpan（高），最后一个在 -halfSpan（低）
---   iconDir=-1（下→上）：反向排列
--- DEFAULT 模式：固定槽位。
-function Layout:LayoutBuffV(viewer, visible, slotOf, w, h, cfg, iconDir, doCenter)
-    if doCenter then
-        local n = #visible
-        local totalH = n * h + math.max(0, n - 1) * cfg.spacingY
-        local halfSpan = (totalH - h) / 2
-        for i, icon in ipairs(visible) do
-            -- iconDir=1: 从上到下，y 由 +halfSpan 递减
-            -- iconDir=-1: 从下到上，y 由 -halfSpan 递增
-            local y = (halfSpan - (i - 1) * (h + cfg.spacingY)) * iconDir
-            SetPointCached(icon, "CENTER", viewer, 0, y)
-        end
-    else
-        local vertDir = -iconDir   -- 垂直方向取反，与 CMC 一致
-        local anchor = (iconDir == 1) and "BOTTOMLEFT" or "TOPLEFT"
-        for _, icon in ipairs(visible) do
-            local y = -(slotOf[icon]) * (h + cfg.spacingY) * vertDir
-            SetPointCached(icon, anchor, viewer, 0, y)
-        end
+-- Buff 垂直布局（DEFAULT 模式：固定槽位，与 CMC 一致）
+-- CENTER 模式由 Layout/BuffCentering.lua 的 OnUpdate 循环处理。
+function Layout:LayoutBuffV(viewer, visible, slotOf, w, h, cfg, iconDir)
+    local vertDir = -iconDir   -- 垂直方向取反，与 CMC 一致
+    local anchor = (iconDir == 1) and "BOTTOMLEFT" or "TOPLEFT"
+    for _, icon in ipairs(visible) do
+        local y = -(slotOf[icon]) * (h + cfg.spacingY) * vertDir
+        SetPointCached(icon, anchor, viewer, 0, y)
     end
 end
 

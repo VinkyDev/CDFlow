@@ -8,6 +8,7 @@ local MB = ns.MonitorBars
 local IM = ns.ItemMonitor
 
 local buffRefreshPending = false
+local buffViewerHooksSetup = false   -- SetupBuffViewerHooks 只执行一次的守卫
 local trackedBarsRefreshPending = false
 local RequestTrackedBarsRefresh  -- 前向声明，供 HookTrackedBarChildren 内的闭包捕获
 local trackedBarsProxyFrame
@@ -127,31 +128,89 @@ local function HideTrackedBarsProxy()
     end
 end
 
-local function HookBuffChildren()
+------------------------------------------------------
+-- Buff Viewer 刷新（带 IsInitialized 重试）
+------------------------------------------------------
+
+local function DoBuffViewerRefresh(attempt)
+    attempt = attempt or 0
     local viewer = BuffIconCooldownViewer
     if not viewer then return end
-
-    local children = { viewer:GetChildren() }
-    for _, child in ipairs(children) do
-        if child and child.Icon and not child._cdf_hooked then
-            child._cdf_hooked = true
-            if child.HookScript then
-                for _, script in ipairs({ "OnActiveStateChanged", "OnUnitAuraAddedEvent", "OnUnitAuraRemovedEvent" }) do
-                    pcall(child.HookScript, child, script, RequestBuffViewerRefresh)
-                end
-            end
+    -- viewer 尚未初始化时（reload 后首次进入世界的短暂窗口），延迟重试
+    if viewer.IsInitialized and not viewer:IsInitialized() then
+        if attempt < 5 then
+            C_Timer.After(0.1, function() DoBuffViewerRefresh(attempt + 1) end)
         end
+        return
     end
+    Layout:RefreshViewer("BuffIconCooldownViewer")
 end
 
 local function RequestBuffViewerRefresh()
     if buffRefreshPending then return end
     buffRefreshPending = true
-    -- 下一帧触发，确保当帧所有 OnActiveStateChanged 处理完后再居中，
+    -- 下一帧触发，确保当帧所有 OnActiveStateChanged 处理完后再居中
     C_Timer.After(0, function()
         buffRefreshPending = false
-        HookBuffChildren()
-        Layout:RefreshViewer("BuffIconCooldownViewer")
+        DoBuffViewerRefresh()
+    end)
+end
+
+-- 供 MonitorBars/Bars.lua 的 RebuildCDMSuppressedSet 调用：
+-- 重建 suppressed 集合后立即触发完整 RefreshViewer（执行 SplitVisible 隐藏逻辑）。
+-- 在 ADDON_LOADED 完成后注入到 Layout 命名空间，避免循环依赖。
+Layout.RequestBuffRefreshFromMB = RequestBuffViewerRefresh
+
+------------------------------------------------------
+-- Buff Viewer 综合钩子
+-- 只执行一次，由 RegisterCDMHooks 和 PLAYER_ENTERING_WORLD 保证调用
+------------------------------------------------------
+
+local function SetupBuffViewerHooks()
+    local viewer = BuffIconCooldownViewer
+    if not viewer or buffViewerHooksSetup then return end
+    buffViewerHooksSetup = true
+
+    -- RefreshData → 战斗中每次 buff 数据更新触发
+    if viewer.RefreshData then
+        hooksecurefunc(viewer, "RefreshData", function()
+            Layout:MarkBuffCenteringDirty()
+            RequestBuffViewerRefresh()
+        end)
+    end
+
+    -- UpdateLayout / Layout → 布局重算完成后触发
+    local function OnPostLayout()
+        Layout:MarkBuffCenteringDirty()
+        RequestBuffViewerRefresh()
+    end
+    if viewer.UpdateLayout then
+        hooksecurefunc(viewer, "UpdateLayout", OnPostLayout)
+    elseif viewer.Layout then
+        hooksecurefunc(viewer, "Layout", OnPostLayout)
+    end
+
+    -- itemFramePool.Acquire → 新帧从池激活（新 buff 出现）
+    -- itemFramePool.Release → 帧归还池（buff 消失），立即重排
+    if viewer.itemFramePool then
+        if not viewer.itemFramePool._cdf_acquireHooked then
+            viewer.itemFramePool._cdf_acquireHooked = true
+            hooksecurefunc(viewer.itemFramePool, "Acquire", function()
+                RequestBuffViewerRefresh()
+            end)
+        end
+        if not viewer.itemFramePool._cdf_releaseHooked then
+            viewer.itemFramePool._cdf_releaseHooked = true
+            hooksecurefunc(viewer.itemFramePool, "Release", function()
+                Layout:MarkBuffCenteringDirty()   -- 立即标脏，下帧 OnUpdate 重排
+                RequestBuffViewerRefresh()
+            end)
+        end
+    end
+
+    -- OnShow → viewer 变为可见时刷新
+    viewer:HookScript("OnShow", function()
+        RequestBuffViewerRefresh()
     end)
 end
 
@@ -201,48 +260,51 @@ RequestTrackedBarsRefresh = function()
 end
 
 local function RegisterCDMHooks()
+    -- Essential / Utility：只需 hook RefreshLayout
     if EssentialCooldownViewer then
         hooksecurefunc(EssentialCooldownViewer, "RefreshLayout", function()
             Layout:RefreshViewer("EssentialCooldownViewer")
         end)
     end
-
     if UtilityCooldownViewer then
         hooksecurefunc(UtilityCooldownViewer, "RefreshLayout", function()
             Layout:RefreshViewer("UtilityCooldownViewer")
         end)
     end
 
+    -- Buff viewer：RefreshData / UpdateLayout / Pool / OnShow 综合钩子
+    SetupBuffViewerHooks()
+
+    -- Buff viewer RefreshLayout → 兜底钩子（布局设置/大小变更时）
     if BuffIconCooldownViewer then
         hooksecurefunc(BuffIconCooldownViewer, "RefreshLayout", function()
-            HookBuffChildren()
+            Layout:MarkBuffCenteringDirty()
             Layout:RefreshViewer("BuffIconCooldownViewer")
         end)
     end
 
-    -- Mixin 级别钩子：在 OnCooldownIDSet / OnActiveStateChanged 触发时
-    -- 立即进行临时放置，消除自定义分组图标出现时的首帧延迟
-    if CooldownViewerBuffIconItemMixin then
+    -- Mixin 级别钩子：OnCooldownIDSet / OnActiveStateChanged
         if CooldownViewerBuffIconItemMixin.OnCooldownIDSet then
             hooksecurefunc(CooldownViewerBuffIconItemMixin, "OnCooldownIDSet", function(frame)
                 if not BuffIconCooldownViewer then return end
-                if frame:GetParent() ~= BuffIconCooldownViewer then return end
-                -- 实时更新 spellID→cooldownID 映射并重建 suppressed 集合，
-                -- 修复 reload 后首次战斗中 hideFromCDM 未能及时生效的问题
+                local parent = frame:GetParent()
+                if parent ~= BuffIconCooldownViewer and parent ~= UIParent then return end
+                -- 实时更新 spellID→cooldownID 映射并重建 suppressed 集合
                 if MB and MB.UpdateFrameMapping then
                     MB:UpdateFrameMapping(frame)
                 end
                 Layout:ProvisionalPlaceInGroup(frame)
+                Layout:MarkBuffCenteringDirty()
                 RequestBuffViewerRefresh()
             end)
         end
         if CooldownViewerBuffIconItemMixin.OnActiveStateChanged then
             hooksecurefunc(CooldownViewerBuffIconItemMixin, "OnActiveStateChanged", function(frame)
                 if not BuffIconCooldownViewer then return end
-                if frame:GetParent() ~= BuffIconCooldownViewer then return end
+                local parent = frame:GetParent()
+                if parent ~= BuffIconCooldownViewer and parent ~= UIParent then return end
                 Layout:ProvisionalPlaceInGroup(frame)
-                -- per-instance HookScript 对 OnActiveStateChanged（CDM 自定义 Lua 方法）
-                -- 静默失败，必须在此处统一触发刷新，确保每次 buff 激活/失活都重新居中
+                Layout:MarkBuffCenteringDirty()
                 RequestBuffViewerRefresh()
             end)
         end
@@ -356,6 +418,11 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         RegisterCDMHooks()
         RegisterEventRegistryCallbacks(mods)
         SetupGlowHooks()
+        -- 立即初始化分组容器，确保第一次 buff 触发时 buffGroupContainers 已就绪。
+        -- GetGroupIdxForIcon 在返回分组索引前会检查 buffGroupContainers[gIdx]，
+        -- 若容器为 nil（InitBuffGroups 未调用），ProvisionalPlaceInGroup 永远返回 nil
+        -- 导致首次触发的 buff 显示在系统 buff 组而非自定义分组。
+        Layout:InitBuffGroups()
     end
 
     if mods.trackedBars then
@@ -374,13 +441,21 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
     local eventHandlers = {}
 
     eventHandlers["PLAYER_ENTERING_WORLD"] = function()
-        if mods.cdmBeautify then RequestRefreshAll(0) end
+        if mods.cdmBeautify then
+            RequestRefreshAll(0)
+            -- 确保 buff viewer 钩子就位（ADDON_LOADED 时 viewer 可能尚未可用）
+            SetupBuffViewerHooks()
+            -- 立即重建分组容器（进入新地图/reload 时，确保战斗开始前容器就绪）
+            Layout:InitBuffGroups()
+        end
         C_Timer.After(0.5, function()
             if mods.monitorBars then
                 MB:ScanCDMViewers()
                 MB:RebuildAllBars()
             end
             if mods.cdmBeautify then
+                -- 再次尝试挂钩
+                SetupBuffViewerHooks()
                 Layout:InitBuffGroups()  -- 容器必须在 RefreshAll 前就绪
                 Layout:RefreshAll()
             end

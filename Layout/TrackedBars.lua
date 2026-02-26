@@ -202,7 +202,7 @@ local function ApplyTrackedBarStyle(frame, cfg)
         fd.barBackground:ClearAllPoints()
         fd.barBackground:SetAllPoints(bar)
         fd.barBackground:SetTexture(barTexture)
-        local bg = cfg.bgColor
+        local bg = cfg.bgColor or { 0.1, 0.1, 0.1, 0.8 }
         fd.barBackground:SetVertexColor(bg[1] or 0.1, bg[2] or 0.1, bg[3] or 0.1, bg[4] or 0.8)
 
         -- 隐藏官方背景纹理

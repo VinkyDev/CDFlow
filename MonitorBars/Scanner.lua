@@ -116,12 +116,26 @@ function MB:ScanCDMViewers()
         local viewer = _G[viewerName]
         if viewer then
             local isAuraViewer = (viewerName == "BuffIconCooldownViewer" or viewerName == "BuffBarCooldownViewer")
-            for _, child in ipairs({ viewer:GetChildren() }) do
-                local cdID = GetCooldownIDFromFrame(child)
-                if cdID then
-                    cooldownIDToFrame[cdID] = child
-                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                    MapSpellInfo(info, cdID, isAuraViewer)
+            -- 优先 itemFramePool:EnumerateActive()：
+            -- CENTER 模式下 buff 图标已 re-parent 到 UIParent，GetChildren() 找不到它们，
+            -- 导致 spellToCooldownID 映射缺失，进而 RebuildCDMSuppressedSet 无法建立 suppressed。
+            if viewer.itemFramePool then
+                for frame in viewer.itemFramePool:EnumerateActive() do
+                    local cdID = GetCooldownIDFromFrame(frame)
+                    if cdID then
+                        cooldownIDToFrame[cdID] = frame
+                        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+                        MapSpellInfo(info, cdID, isAuraViewer)
+                    end
+                end
+            else
+                for _, child in ipairs({ viewer:GetChildren() }) do
+                    local cdID = GetCooldownIDFromFrame(child)
+                    if cdID then
+                        cooldownIDToFrame[cdID] = child
+                        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+                        MapSpellInfo(info, cdID, isAuraViewer)
+                    end
                 end
             end
         end
@@ -142,11 +156,21 @@ function MB.FindCDMFrame(cooldownID)
     for _, viewerName in ipairs(CDM_VIEWERS) do
         local viewer = _G[viewerName]
         if viewer then
-            for _, child in ipairs({ viewer:GetChildren() }) do
-                local cdID = GetCooldownIDFromFrame(child)
-                if cdID == cooldownID then
-                    cooldownIDToFrame[cdID] = child
-                    return child
+            if viewer.itemFramePool then
+                for frame in viewer.itemFramePool:EnumerateActive() do
+                    local cdID = GetCooldownIDFromFrame(frame)
+                    if cdID == cooldownID then
+                        cooldownIDToFrame[cdID] = frame
+                        return frame
+                    end
+                end
+            else
+                for _, child in ipairs({ viewer:GetChildren() }) do
+                    local cdID = GetCooldownIDFromFrame(child)
+                    if cdID == cooldownID then
+                        cooldownIDToFrame[cdID] = child
+                        return child
+                    end
                 end
             end
         end
@@ -164,7 +188,7 @@ function MB:GetSpellCatalog()
         local viewer = _G[viewerName]
         if viewer then
             local isAura = AURA_VIEWERS[viewerName]
-            for _, child in ipairs({ viewer:GetChildren() }) do
+            local function processFrame(child)
                 local cdID = GetCooldownIDFromFrame(child)
                 if cdID then
                     local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
@@ -183,6 +207,15 @@ function MB:GetSpellCatalog()
                             end
                         end
                     end
+                end
+            end
+            if viewer.itemFramePool then
+                for frame in viewer.itemFramePool:EnumerateActive() do
+                    processFrame(frame)
+                end
+            else
+                for _, child in ipairs({ viewer:GetChildren() }) do
+                    processFrame(child)
                 end
             end
         end
