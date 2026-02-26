@@ -165,15 +165,24 @@ function Layout:ProvisionalPlaceInGroup(frame)
     if not cfg then return end
 
     -- 收集分组内已可见的其他图标；触发帧始终加入（可能尚未 IsShown）
+    -- 优先 itemFramePool：re-parent 后的帧已不在 GetChildren 中，需通过 pool 枚举
     local viewer = _G["BuffIconCooldownViewer"]
     local groupIcons = {}
 
     if viewer then
-        local children = { viewer:GetChildren() }
-        for _, child in ipairs(children) do
-            if child and child.Icon and child ~= frame and child:IsShown()
-                and self:GetGroupIdxForIcon(child) == gIdx then
-                groupIcons[#groupIcons + 1] = child
+        if viewer.itemFramePool then
+            for child in viewer.itemFramePool:EnumerateActive() do
+                if child and child.Icon and child ~= frame and child:IsShown()
+                    and self:GetGroupIdxForIcon(child) == gIdx then
+                    groupIcons[#groupIcons + 1] = child
+                end
+            end
+        else
+            for _, child in ipairs({ viewer:GetChildren() }) do
+                if child and child.Icon and child ~= frame and child:IsShown()
+                    and self:GetGroupIdxForIcon(child) == gIdx then
+                    groupIcons[#groupIcons + 1] = child
+                end
             end
         end
     end
@@ -454,6 +463,8 @@ function Layout:RefreshBuffGroups(groupBuckets, w, h, cfg)
                 local startX = -(totalW / 2) + w / 2
                 container:SetSize(totalW, h)
                 for i, icon in ipairs(icons) do
+                    -- re-parent 到 UIParent，防止 viewer RefreshLayout 干扰分组图标
+                    icon:SetParent(UIParent)
                     icon:ClearAllPoints()
                     icon:SetPoint("CENTER", container, "CENTER",
                         startX + (i - 1) * (w + spacingX), 0)
@@ -464,6 +475,8 @@ function Layout:RefreshBuffGroups(groupBuckets, w, h, cfg)
                 local startY = (totalH / 2) - h / 2
                 container:SetSize(w, totalH)
                 for i, icon in ipairs(icons) do
+                    -- re-parent 到 UIParent，防止 viewer RefreshLayout 干扰分组图标
+                    icon:SetParent(UIParent)
                     icon:ClearAllPoints()
                     icon:SetPoint("CENTER", container, "CENTER",
                         0, startY - (i - 1) * (h + spacingY))
