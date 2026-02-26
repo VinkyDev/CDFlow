@@ -342,24 +342,46 @@ function Layout:RefreshBuffViewer(viewer, cfg)
                 Style:HideBuffGlow(icon)
             end
         end
+        -- 分组容器也可能有图标，但若全部不可见则无需处理
         return
     end
 
-    -- 居中时 total 排除 hideFromCDM 的 buff，不参与布局计算
-    local suppressed = ns.cdmSuppressedCooldownIDs
-    local total = #allIcons
-    if doCenter and suppressed then
-        local nonSuppressed = 0
-        for _, icon in ipairs(allIcons) do
-            if not suppressed[icon.cooldownID] then
-                nonSuppressed = nonSuppressed + 1
+    -- 将 visible 拆分为主组和各自定义分组
+    -- 使用 GetGroupIdxForIcon 进行多源技能ID匹配（含 base 归一化与帧级缓存）
+    local hasGroups = self.GetGroupIdxForIcon ~= nil
+        and ns.db and ns.db.buffGroups and #ns.db.buffGroups > 0
+    local mainVisible = visible
+    local groupBuckets = {}
+
+    if hasGroups then
+        mainVisible = {}
+        for _, icon in ipairs(visible) do
+            local gIdx = self:GetGroupIdxForIcon(icon)
+            if gIdx then
+                groupBuckets[gIdx] = groupBuckets[gIdx] or {}
+                groupBuckets[gIdx][#groupBuckets[gIdx] + 1] = icon
+            else
+                mainVisible[#mainVisible + 1] = icon
             end
         end
-        total = nonSuppressed
+    end
+
+    -- 居中时 total 排除 hideFromCDM 和已分组的 buff，不参与主组布局计算
+    local suppressed = ns.cdmSuppressedCooldownIDs
+    local total = #allIcons
+    if doCenter then
+        local counted = 0
+        for _, icon in ipairs(allIcons) do
+            local isGrouped = hasGroups and (self:GetGroupIdxForIcon(icon) ~= nil)
+            if not isGrouped and (not suppressed or not suppressed[icon.cooldownID]) then
+                counted = counted + 1
+            end
+        end
+        total = counted
     end
     local buffGlowCfg = db.buffGlow
 
-    -- 构建可见集合，用于快速查找
+    -- 构建可见集合（含分组图标），用于高亮判断
     local visibleSet = {}
     for _, icon in ipairs(visible) do
         visibleSet[icon] = true
@@ -387,7 +409,7 @@ function Layout:RefreshBuffViewer(viewer, cfg)
         end
     end
 
-    -- 应用样式
+    -- 应用样式（含分组图标）
     for _, icon in ipairs(visible) do
         icon._cdf_viewerKey = "buffs"
         Style:ApplyIcon(icon, w, h, db.iconZoom, db.borderSize)
@@ -397,15 +419,22 @@ function Layout:RefreshBuffViewer(viewer, cfg)
         Style:ApplySwipeOverlay(icon)
     end
 
-    -- 定位
-    if isH then
-        self:LayoutBuffH(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
-    else
-        self:LayoutBuffV(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
+    -- 主组定位（仅非分组图标）
+    if #mainVisible > 0 then
+        if isH then
+            self:LayoutBuffH(viewer, mainVisible, slotOf, total, w, h, cfg, iconDir, doCenter)
+        else
+            self:LayoutBuffV(viewer, mainVisible, slotOf, total, w, h, cfg, iconDir, doCenter)
+        end
     end
 
-    -- 同步 viewer 尺寸与图标边界，使编辑模式圈选区域与实际显示一致
-    UpdateViewerSizeToMatchIcons(viewer, visible)
+    -- 自定义分组定位
+    if hasGroups then
+        self:RefreshBuffGroups(groupBuckets, w, h, cfg)
+    end
+
+    -- 同步 viewer 尺寸与主组图标边界，使编辑模式圈选区域与实际显示一致
+    UpdateViewerSizeToMatchIcons(viewer, mainVisible)
 end
 
 -- Buff 水平布局

@@ -24,6 +24,7 @@ Style\Glow.lua
 Style\Keybind.lua
 Style\Text.lua
 Layout.lua
+Layout\BuffGroups.lua
 Visibility.lua
 MonitorBars\Scanner.lua
 MonitorBars\Bars.lua
@@ -31,6 +32,7 @@ Init.lua
 UI\Widgets.lua
 UI\GeneralTab.lua
 UI\ViewerTab.lua
+UI\BuffGroupsTab.lua
 UI\HighlightTab.lua
 UI\ProfilesTab.lua
 UI\TrackedBarsTab.lua

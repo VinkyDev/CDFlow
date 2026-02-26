@@ -13,6 +13,7 @@ local function GetTabList()
         tabs[#tabs + 1] = { value = "essential",   text = L.essential }
         tabs[#tabs + 1] = { value = "utility",     text = L.utility }
         tabs[#tabs + 1] = { value = "buffs",       text = L.buffs }
+        tabs[#tabs + 1] = { value = "buffGroups",  text = L.buffGroups }
         tabs[#tabs + 1] = { value = "trackedBars", text = L.trackedBars }
         tabs[#tabs + 1] = { value = "highlight",   text = L.highlight }
     end
@@ -40,10 +41,14 @@ local function OnTabSelected(container, _, group)
         ns.BuildViewerTab(scroll, "utility", true, false)
     elseif group == "buffs" then
         ns.BuildViewerTab(scroll, "buffs", false, false)
-    elseif group == "trackedBars" then
-        if ns.BuildTrackedBarsTab then
-            ns.BuildTrackedBarsTab(scroll)
+    elseif group == "buffGroups" then
+        if ns.BuildBuffGroupsTab then
+            ns.BuildBuffGroupsTab(scroll)
         end
+    elseif group == "trackedBars" then
+            if ns.BuildTrackedBarsTab then
+                ns.BuildTrackedBarsTab(scroll)
+            end
     elseif group == "highlight" then
         ns.BuildHighlightTab(scroll)
     elseif group == "monitorBars" then

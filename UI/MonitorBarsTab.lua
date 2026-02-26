@@ -555,107 +555,51 @@ local function ShowCatalog(rebuildTab)
         catalogFrame = nil
     end
 
-    local frame = AceGUI:Create("Frame")
-    frame:SetTitle("CDFlow - " .. L.mbScanCatalog)
-    frame:SetWidth(420)
-    frame:SetHeight(500)
-    frame:SetLayout("Fill")
-    frame:SetCallback("OnClose", function(w) w:Release(); catalogFrame = nil end)
-    frame:EnableResize(false)
-    catalogFrame = frame
-
-    local scroll = AceGUI:Create("ScrollFrame")
-    scroll:SetLayout("Flow")
-    scroll:SetFullWidth(true)
-    scroll:SetFullHeight(true)
-    frame:AddChild(scroll)
-
     local cfg = ns.db.monitorBars
 
-    local manualGroup = AceGUI:Create("InlineGroup")
-    manualGroup:SetTitle(L.mbManualAdd)
-    manualGroup:SetFullWidth(true)
-    manualGroup:SetLayout("Flow")
-    scroll:AddChild(manualGroup)
-
-    local manualBox = AceGUI:Create("EditBox")
-    manualBox:SetLabel(L.mbSpellID)
-    manualBox:SetFullWidth(true)
-    manualBox:SetCallback("OnEnterPressed", function(_, _, val)
-        local spellID = tonumber(val)
-        if not spellID or spellID <= 0 then return end
-        local spellName = C_Spell.GetSpellName(spellID) or ""
-        local chargeInfo = C_Spell.GetSpellCharges(spellID)
+    local function AddBar(spellID, spellName, barType, unit)
         local id = cfg.nextID or (#cfg.bars + 1)
         cfg.nextID = id + 1
-        local bar = NewBarDefaults(id, "charge", spellID, spellName)
-        if chargeInfo and chargeInfo.maxCharges then
-            if not issecretvalue or not issecretvalue(chargeInfo.maxCharges) then
-                bar.maxCharges = chargeInfo.maxCharges
+        local bar = NewBarDefaults(id, barType, spellID, spellName, unit)
+        if barType == "charge" then
+            local chargeInfo = C_Spell.GetSpellCharges(spellID)
+            if chargeInfo and chargeInfo.maxCharges then
+                if not issecretvalue or not issecretvalue(chargeInfo.maxCharges) then
+                    bar.maxCharges = chargeInfo.maxCharges
+                end
             end
         end
         table.insert(cfg.bars, bar)
         selectedBarIndex = #cfg.bars
         MB:RebuildAllBars()
         if rebuildTab then rebuildTab() end
-        if catalogFrame then catalogFrame:Release(); catalogFrame = nil end
         print("|cff00ccff[CDFlow]|r " .. string.format(L.mbAdded, spellName ~= "" and spellName or tostring(spellID)))
-    end)
-    manualGroup:AddChild(manualBox)
-
-    local function AddEntry(entry, barType)
-        local btn = AceGUI:Create("InteractiveLabel")
-        local tex = entry.icon and ("|T" .. entry.icon .. ":16:16:0:0|t ") or ""
-        btn:SetText(tex .. "|cffffffff" .. entry.name .. "|r  |cff888888(" .. entry.spellID .. ")|r")
-        btn:SetFullWidth(true)
-        btn:SetHighlight("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-        btn:SetCallback("OnClick", function()
-            local id = cfg.nextID or (#cfg.bars + 1)
-            cfg.nextID = id + 1
-            local bar = NewBarDefaults(id, barType, entry.spellID, entry.name, entry.unit)
-            if barType == "charge" then
-                local chargeInfo = C_Spell.GetSpellCharges(entry.spellID)
-                if chargeInfo and chargeInfo.maxCharges then
-                    if not issecretvalue or not issecretvalue(chargeInfo.maxCharges) then
-                        bar.maxCharges = chargeInfo.maxCharges
-                    end
-                end
-            end
-            table.insert(cfg.bars, bar)
-            selectedBarIndex = #cfg.bars
-            MB:RebuildAllBars()
-            if rebuildTab then rebuildTab() end
-            print("|cff00ccff[CDFlow]|r " .. string.format(L.mbAdded, entry.name))
-        end)
-        scroll:AddChild(btn)
     end
 
-    if #cooldowns > 0 then
-        local h1 = AceGUI:Create("Heading")
-        h1:SetText(L.mbCatalogCooldowns .. " (" .. #cooldowns .. ")")
-        h1:SetFullWidth(true)
-        scroll:AddChild(h1)
-        for _, entry in ipairs(cooldowns) do
-            AddEntry(entry, "charge")
+    -- 使用共享目录弹窗
+    catalogFrame = ns.UI.OpenSpellCatalogFrame(
+        "CDFlow - " .. L.mbScanCatalog,
+        {
+            {
+                heading  = L.mbCatalogCooldowns,
+                entries  = cooldowns,
+                onSelect = function(entry)
+                    AddBar(entry.spellID, entry.name, "charge", entry.unit)
+                end,
+            },
+            {
+                heading  = L.mbCatalogAuras,
+                entries  = auras,
+                onSelect = function(entry)
+                    AddBar(entry.spellID, entry.name, "stack", entry.unit)
+                end,
+            },
+        },
+        function(spellID, spellName)
+            AddBar(spellID, spellName, "charge", "player")
         end
-    end
-
-    if #auras > 0 then
-        local h2 = AceGUI:Create("Heading")
-        h2:SetText(L.mbCatalogAuras .. " (" .. #auras .. ")")
-        h2:SetFullWidth(true)
-        scroll:AddChild(h2)
-        for _, entry in ipairs(auras) do
-            AddEntry(entry, "stack")
-        end
-    end
-
-    if #cooldowns == 0 and #auras == 0 then
-        local emptyLabel = AceGUI:Create("Label")
-        emptyLabel:SetText("|cffaaaaaa" .. L.mbCatalogEmpty .. "|r")
-        emptyLabel:SetFullWidth(true)
-        scroll:AddChild(emptyLabel)
-    end
+    )
+    catalogFrame:SetCallback("OnClose", function(w) w:Release(); catalogFrame = nil end)
 end
 
 function ns.BuildMonitorBarsTab(scroll)

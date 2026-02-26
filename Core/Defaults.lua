@@ -203,6 +203,11 @@ ns.defaults = {
         bars   = {},
     },
 
+    -- 增益自定义分组
+    -- 每个元素：{ name, horizontal, x, y, spellIDs={[spellID]=true} }
+    buffGroupsLocked = false,
+    buffGroups = {},
+
     -- 显示规则
     visibility = {
         mode            = "ALWAYS",

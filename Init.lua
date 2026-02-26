@@ -108,6 +108,28 @@ local function RegisterHooks()
             Layout:RefreshTrackedBars()
         end)
     end
+
+    -- Mixin 级别钩子：在 OnCooldownIDSet / OnActiveStateChanged 触发时
+    -- 立即进行临时放置，消除自定义分组图标出现时的首帧延迟（参考 Ayije_CDM Main.lua）
+    if CooldownViewerBuffIconItemMixin then
+        if CooldownViewerBuffIconItemMixin.OnCooldownIDSet then
+            hooksecurefunc(CooldownViewerBuffIconItemMixin, "OnCooldownIDSet", function(frame)
+                if not BuffIconCooldownViewer then return end
+                if frame:GetParent() ~= BuffIconCooldownViewer then return end
+                Layout:ProvisionalPlaceInGroup(frame)
+                RequestBuffViewerRefresh()
+            end)
+        end
+        if CooldownViewerBuffIconItemMixin.OnActiveStateChanged then
+            hooksecurefunc(CooldownViewerBuffIconItemMixin, "OnActiveStateChanged", function(frame)
+                if not BuffIconCooldownViewer then return end
+                if frame:GetParent() ~= BuffIconCooldownViewer then return end
+                Layout:ProvisionalPlaceInGroup(frame)
+                -- 注意：per-instance 的 OnActiveStateChanged 钩子已经调用
+                -- RequestBuffViewerRefresh，此处不重复排队
+            end)
+        end
+    end
 end
 
 local VIEWER_SET = {}
@@ -156,6 +178,7 @@ local function RegisterEventRegistryCallbacks()
         RequestRefreshAll(0)
         C_Timer.After(0.15, RequestBuffViewerRefresh)
         C_Timer.After(0.15, RequestTrackedBarsRefresh)
+        C_Timer.After(0.15, function() Layout:PositionGroupContainers() end)
     end)
 
     EventRegistry:RegisterCallback("EditMode.Enter", function()
@@ -179,6 +202,7 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
     local function OnProfileChanged()
         ns:OnProfileChanged()
         if ns.db.modules.cdmBeautify then
+            Layout:InitBuffGroups()  -- 容器必须在 RefreshAll 前就绪
             Layout:RefreshAll()
         end
         if ns.db.modules.monitorBars and MB then
@@ -219,7 +243,10 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
                 MB:ScanCDMViewers()
                 MB:RebuildAllBars()
             end
-            if mods.cdmBeautify then Layout:RefreshAll() end
+            if mods.cdmBeautify then
+                Layout:InitBuffGroups()  -- 容器必须在 RefreshAll 前就绪
+                Layout:RefreshAll()
+            end
             if ns.Visibility then ns.Visibility:UpdateAll() end
         end)
     end
