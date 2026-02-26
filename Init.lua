@@ -31,7 +31,8 @@ end
 local function RequestBuffViewerRefresh()
     if buffRefreshPending then return end
     buffRefreshPending = true
-    C_Timer.After(0.05, function()
+    -- 下一帧触发，确保当帧所有 OnActiveStateChanged 处理完后再居中，
+    C_Timer.After(0, function()
         buffRefreshPending = false
         HookBuffChildren()
         Layout:RefreshViewer("BuffIconCooldownViewer")
@@ -110,6 +111,11 @@ local function RegisterCDMHooks()
             hooksecurefunc(CooldownViewerBuffIconItemMixin, "OnCooldownIDSet", function(frame)
                 if not BuffIconCooldownViewer then return end
                 if frame:GetParent() ~= BuffIconCooldownViewer then return end
+                -- 实时更新 spellID→cooldownID 映射并重建 suppressed 集合，
+                -- 修复 reload 后首次战斗中 hideFromCDM 未能及时生效的问题
+                if MB and MB.UpdateFrameMapping then
+                    MB:UpdateFrameMapping(frame)
+                end
                 Layout:ProvisionalPlaceInGroup(frame)
                 RequestBuffViewerRefresh()
             end)

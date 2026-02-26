@@ -128,6 +128,10 @@ function MB:ScanCDMViewers()
     end
 
     self:PostScanHook()
+    -- 扫描完成后立即同步 suppressed 集合，确保 OnCombatLeave 后隐藏状态即刻生效
+    if self.RebuildCDMSuppressedSet then
+        self:RebuildCDMSuppressedSet()
+    end
 end
 
 function MB.FindCDMFrame(cooldownID)

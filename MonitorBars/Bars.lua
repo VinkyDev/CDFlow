@@ -809,7 +809,7 @@ local function IsBarVisibleForSpec(barCfg)
     return false
 end
 
-local function RebuildCDMSuppressedSet()
+function MB:RebuildCDMSuppressedSet()
     local suppressed = ns.cdmSuppressedCooldownIDs
     wipe(suppressed)
     local bars = ns.db and ns.db.monitorBars and ns.db.monitorBars.bars
@@ -824,11 +824,39 @@ local function RebuildCDMSuppressedSet()
     end
 end
 
+-- 当 CDM buff 图标帧首次出现时（含战斗中），实时更新 spellID→cooldownID 映射并重建 suppressed 集合。
+-- 解决 reload 后首次战斗中 hideFromCDM 未能及时生效的时序问题。
+function MB:UpdateFrameMapping(frame)
+    if not frame then return end
+    local cdID = MB.GetCooldownIDFromFrame(frame)
+    if not cdID then return end
+    cooldownIDToFrame[cdID] = frame
+    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo and
+        C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+    if info then
+        local sid = MB.ResolveSpellID(info)
+        if sid and sid > 0 and not spellToCooldownID[sid] then
+            spellToCooldownID[sid] = cdID
+        end
+        if info.linkedSpellIDs then
+            for _, lid in ipairs(info.linkedSpellIDs) do
+                if lid and lid > 0 and not spellToCooldownID[lid] then
+                    spellToCooldownID[lid] = cdID
+                end
+            end
+        end
+        if info.spellID and info.spellID > 0 and not spellToCooldownID[info.spellID] then
+            spellToCooldownID[info.spellID] = cdID
+        end
+    end
+    self:RebuildCDMSuppressedSet()
+end
+
 function MB:InitAllBars()
     local bars = ns.db and ns.db.monitorBars and ns.db.monitorBars.bars
     if not bars then return end
 
-    RebuildCDMSuppressedSet()
+    self:RebuildCDMSuppressedSet()
 
     for _, barCfg in ipairs(bars) do
         if barCfg.enabled and barCfg.spellID > 0 and IsBarVisibleForSpec(barCfg) then
