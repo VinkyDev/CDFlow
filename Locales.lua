@@ -305,6 +305,25 @@ local S = {
     bgCDMHint           = { "提示：分组内 Buff 必须在冷却管理器中追踪才能显示；编辑模式下可预览分组位置",
                             "Note: Buffs in groups must be tracked in the Cooldown Manager; use Edit Mode to preview group positions" },
 
+    -- 物品监控
+    itemMonitor         = { "物品监控",         "Item Monitor" },
+    imLocked            = { "锁定位置",         "Lock Position" },
+    imAddItem           = { "添加物品",         "Add Item" },
+    imItemID            = { "物品ID",           "Item ID" },
+    imNoItems           = { "暂无监控物品",     "No items monitored" },
+    imItemPreviewOk     = { "物品: %s",         "Item: %s" },
+    imItemPreviewErr    = { "无效的物品ID",     "Invalid item ID" },
+    imItemLoading       = { "加载中...",         "Loading..." },
+    imNudgeHint         = { "拖动或滚轮微调位置 | Shift=水平 | Ctrl=大步进",
+                            "Drag or scroll to adjust | Shift=horizontal | Ctrl=10px" },
+    imRemove            = { "移除",             "Remove" },
+    imLayout            = { "布局配置",         "Layout" },
+    imKeyLabel          = { "键位",             "Key" },
+    imItemCount         = { "物品数量",         "Item Count" },
+    imWhenZero          = { "数量为0时",        "When count is 0" },
+    imWhenZeroGray      = { "显示为灰色",       "Show in gray" },
+    imWhenZeroHide      = { "隐藏",             "Hide" },
+
     -- 功能模块
     moduleManage        = { "功能模块",                                       "Modules" },
     moduleReloadHint    = { "切换模块后需 /reload 重载界面生效",              "Module changes require /reload to take effect" },

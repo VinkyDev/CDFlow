@@ -208,6 +208,49 @@ ns.defaults = {
     buffGroupsLocked = false,
     buffGroups = {},
 
+    -- 物品监控
+    itemMonitor = {
+        locked      = false,
+        posX        = 0,
+        posY        = -340,
+        growDir     = "TOP",
+        rowAnchor   = "CENTER",
+        iconsPerRow = 6,
+        iconWidth   = 40,
+        iconHeight  = 40,
+        spacingX    = 2,
+        spacingY    = 2,
+        items       = {},   -- array of itemID (number)
+        itemCount = {
+            enabled   = true,
+            fontSize   = 12,
+            whenZero   = "gray",   -- "gray" = 整颗图标变灰; "hide" = 整颗图标隐藏
+            offsetX    = -2,
+            offsetY    = 2,
+        },
+        keybind = {
+            enabled     = false,
+            fontSize    = 10,
+            fontName    = "默认",
+            outline     = "OUTLINE",
+            textColor   = { 1, 1, 1, 1 },
+            point       = "TOPRIGHT",
+            offsetX     = 0,
+            offsetY     = -2,
+            manualByItem = {},
+        },
+        cooldownText = {
+            enabled   = false,
+            fontSize  = 14,
+            fontName  = "默认",
+            outline   = "OUTLINE",
+            textColor = { 1, 0.82, 0, 1 },
+            point     = "CENTER",
+            offsetX   = 0,
+            offsetY   = 0,
+        },
+    },
+
     -- 显示规则
     visibility = {
         mode            = "ALWAYS",

@@ -5,6 +5,7 @@ local Layout = ns.Layout
 local Style  = ns.Style
 local L = ns.L
 local MB = ns.MonitorBars
+local IM = ns.ItemMonitor
 
 local buffRefreshPending = false
 local trackedBarsRefreshPending = false
@@ -208,6 +209,7 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         if ns.db.modules.monitorBars and MB then
             MB:RebuildAllBars()
         end
+        if IM then IM:Init() end
         if ns.Visibility then
             ns.Visibility:Initialize()
         end
@@ -247,6 +249,7 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
                 Layout:InitBuffGroups()  -- 容器必须在 RefreshAll 前就绪
                 Layout:RefreshAll()
             end
+            if IM then IM:Init() end
             if ns.Visibility then ns.Visibility:UpdateAll() end
         end)
     end
@@ -309,6 +312,7 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
         eventHandlers["SPELL_UPDATE_COOLDOWN"] = function()
             MB:OnCooldownUpdate()
+            if IM then IM:UpdateAllCooldowns() end
         end
 
         eventHandlers["PLAYER_REGEN_ENABLED"] = function()
@@ -321,6 +325,32 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
         eventHandlers["PLAYER_TARGET_CHANGED"] = function()
             MB:OnTargetChanged()
+        end
+    end
+
+    -- 物品监控事件（参考 Ayije_CDM Trinkets.lua 241-258 行）
+    if IM then
+        eventHandlers["BAG_UPDATE_COOLDOWN"] = function()
+            IM:UpdateAllCooldowns()
+        end
+
+        if not eventHandlers["SPELL_UPDATE_COOLDOWN"] then
+            -- 仅 monitorBars 关闭时需要独立注册
+            eventHandlers["SPELL_UPDATE_COOLDOWN"] = function()
+                IM:UpdateAllCooldowns()
+            end
+        end
+
+        eventHandlers["PLAYER_EQUIPMENT_CHANGED"] = function()
+            IM:Init()
+        end
+
+        eventHandlers["GET_ITEM_INFO_RECEIVED"] = function()
+            IM:RefreshItemNames()
+        end
+
+        eventHandlers["BAG_UPDATE"] = function()
+            IM:RefreshItemCounts()
         end
     end
 

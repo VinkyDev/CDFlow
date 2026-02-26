@@ -146,22 +146,28 @@ function Style:ApplyKeybind(button, cfg)
         return
     end
 
-    if not C_CooldownViewer or not C_CooldownViewer.GetCooldownViewerCooldownInfo then
-        return
-    end
-
-    if next(spellToKeyCache) == nil then
-        spellToKeyCache = BuildSpellToKeyMap()
-    end
-    local spellID = GetSpellIDFromIcon(button)
     local keyText
-    if spellID and kb.manualBySpell and kb.manualBySpell[spellID] and kb.manualBySpell[spellID] ~= "" then
-        keyText = kb.manualBySpell[spellID]
-    elseif spellID and kb.manualBySpell and kb.manualBySpell[tostring(spellID)] and kb.manualBySpell[tostring(spellID)] ~= "" then
-        keyText = kb.manualBySpell[tostring(spellID)]
+    if button.itemID then
+        -- 物品监控：仅使用手动指定的键位（manualByItem）
+        local itemID = button.itemID
+        keyText = (kb.manualByItem and (kb.manualByItem[itemID] or kb.manualByItem[tostring(itemID)])) or ""
     else
-        local rawKey = FindKeyForSpell(spellID, spellToKeyCache)
-        keyText = FormatKeyForDisplay(rawKey)
+        -- 技能/增益：从 CDM 图标 spellID + 动作条绑定或 manualBySpell
+        if not C_CooldownViewer or not C_CooldownViewer.GetCooldownViewerCooldownInfo then
+            return
+        end
+        if next(spellToKeyCache) == nil then
+            spellToKeyCache = BuildSpellToKeyMap()
+        end
+        local spellID = GetSpellIDFromIcon(button)
+        if spellID and kb.manualBySpell and kb.manualBySpell[spellID] and kb.manualBySpell[spellID] ~= "" then
+            keyText = kb.manualBySpell[spellID]
+        elseif spellID and kb.manualBySpell and kb.manualBySpell[tostring(spellID)] and kb.manualBySpell[tostring(spellID)] ~= "" then
+            keyText = kb.manualBySpell[tostring(spellID)]
+        else
+            local rawKey = FindKeyForSpell(spellID, spellToKeyCache)
+            keyText = FormatKeyForDisplay(rawKey)
+        end
     end
 
     if not button._cdf_keybindFrame then
