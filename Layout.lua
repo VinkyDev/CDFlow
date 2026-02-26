@@ -366,19 +366,6 @@ function Layout:RefreshBuffViewer(viewer, cfg)
         end
     end
 
-    -- 居中时 total 排除 hideFromCDM 和已分组的 buff，不参与主组布局计算
-    local suppressed = ns.cdmSuppressedCooldownIDs
-    local total = #allIcons
-    if doCenter then
-        local counted = 0
-        for _, icon in ipairs(allIcons) do
-            local isGrouped = hasGroups and (self:GetGroupIdxForIcon(icon) ~= nil)
-            if not isGrouped and (not suppressed or not suppressed[icon.cooldownID]) then
-                counted = counted + 1
-            end
-        end
-        total = counted
-    end
     local buffGlowCfg = db.buffGlow
 
     -- 构建可见集合（含分组图标），用于高亮判断
@@ -422,9 +409,9 @@ function Layout:RefreshBuffViewer(viewer, cfg)
     -- 主组定位（仅非分组图标）
     if #mainVisible > 0 then
         if isH then
-            self:LayoutBuffH(viewer, mainVisible, slotOf, total, w, h, cfg, iconDir, doCenter)
+            self:LayoutBuffH(viewer, mainVisible, slotOf, w, h, cfg, iconDir, doCenter)
         else
-            self:LayoutBuffV(viewer, mainVisible, slotOf, total, w, h, cfg, iconDir, doCenter)
+            self:LayoutBuffV(viewer, mainVisible, slotOf, w, h, cfg, iconDir, doCenter)
         end
     end
 
@@ -438,18 +425,23 @@ function Layout:RefreshBuffViewer(viewer, cfg)
 end
 
 -- Buff 水平布局
-function Layout:LayoutBuffH(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
-    local anchor = "TOP" .. ((iconDir == 1) and "LEFT" or "RIGHT")
-
+-- CENTER 模式：以 viewer CENTER 为锚点动态居中，可见图标始终整体居中，
+--             无需 total/missing，buff 出现/消失时整组平滑居中展开/收缩。
+-- DEFAULT 模式：固定槽位，按 layoutIndex 排列。
+function Layout:LayoutBuffH(viewer, visible, slotOf, w, h, cfg, iconDir, doCenter)
     if doCenter then
-        -- 动态居中：可见 buff 紧凑排列，整体居中于总槽位宽度
-        local missing = total - #visible
-        local startX = ((w + cfg.spacingX) * missing / 2) * iconDir
+        local n = #visible
+        local totalW = n * w + math.max(0, n - 1) * cfg.spacingX
+        -- 以 viewer CENTER 为原点：第一个图标中心偏移量
+        -- iconDir=1（左→右）：从 -(totalW-w)/2 开始向右排列
+        -- iconDir=-1（右→左）：从 +(totalW-w)/2 开始向左排列
+        local startX = -((totalW - w) / 2) * iconDir
         for i, icon in ipairs(visible) do
             local x = startX + (i - 1) * (w + cfg.spacingX) * iconDir
-            SetPointCached(icon, anchor, viewer, x, 0)
+            SetPointCached(icon, "CENTER", viewer, x, 0)
         end
     else
+        local anchor = "TOP" .. ((iconDir == 1) and "LEFT" or "RIGHT")
         for _, icon in ipairs(visible) do
             local x = slotOf[icon] * (w + cfg.spacingX) * iconDir
             SetPointCached(icon, anchor, viewer, x, 0)
@@ -458,18 +450,24 @@ function Layout:LayoutBuffH(viewer, visible, slotOf, total, w, h, cfg, iconDir, 
 end
 
 -- Buff 垂直布局（方向取反，与 CMC 一致）
-function Layout:LayoutBuffV(viewer, visible, slotOf, total, w, h, cfg, iconDir, doCenter)
-    local vertDir = -iconDir   -- 垂直方向取反
-    local anchor = (iconDir == 1) and "BOTTOMLEFT" or "TOPLEFT"
-
+-- CENTER 模式：以 viewer CENTER 为锚点动态居中。
+--   iconDir=1（上→下）：第一个图标中心在 +halfSpan（高），最后一个在 -halfSpan（低）
+--   iconDir=-1（下→上）：反向排列
+-- DEFAULT 模式：固定槽位。
+function Layout:LayoutBuffV(viewer, visible, slotOf, w, h, cfg, iconDir, doCenter)
     if doCenter then
-        local missing = total - #visible
-        local startY = -((h + cfg.spacingY) * missing / 2) * vertDir
+        local n = #visible
+        local totalH = n * h + math.max(0, n - 1) * cfg.spacingY
+        local halfSpan = (totalH - h) / 2
         for i, icon in ipairs(visible) do
-            local y = startY - (i - 1) * (h + cfg.spacingY) * vertDir
-            SetPointCached(icon, anchor, viewer, 0, y)
+            -- iconDir=1: 从上到下，y 由 +halfSpan 递减
+            -- iconDir=-1: 从下到上，y 由 -halfSpan 递增
+            local y = (halfSpan - (i - 1) * (h + cfg.spacingY)) * iconDir
+            SetPointCached(icon, "CENTER", viewer, 0, y)
         end
     else
+        local vertDir = -iconDir   -- 垂直方向取反，与 CMC 一致
+        local anchor = (iconDir == 1) and "BOTTOMLEFT" or "TOPLEFT"
         for _, icon in ipairs(visible) do
             local y = -(slotOf[icon]) * (h + cfg.spacingY) * vertDir
             SetPointCached(icon, anchor, viewer, 0, y)

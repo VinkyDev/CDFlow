@@ -16,8 +16,6 @@ local Layout = ns.Layout
 -- 分组拼写映射：{[spellID]=groupIndex}，含 base 变体
 local _groupSpellMap = {}
 local _groupSpellMapDirty = true
--- 版本计数器：每次 dirty 时自增；每帧缓存结果携带此版本号
-local _groupSpellMapVersion = 0
 
 ------------------------------------------------------
 -- 内部工具
@@ -88,10 +86,9 @@ end
 -- 公开接口：分组映射 + 帧级查找
 ------------------------------------------------------
 
--- 标记分组配置已变更，下次刷新时重建映射，同时令所有帧缓存失效
+-- 标记分组配置已变更，下次刷新时重建 spellID→groupIndex 映射表
 function Layout:MarkBuffGroupsDirty()
     _groupSpellMapDirty = true
-    _groupSpellMapVersion = _groupSpellMapVersion + 1
 end
 
 -- 返回 {[spellID] = groupIndex} 的映射表（按需重建）
@@ -124,46 +121,35 @@ function Layout:GetBuffGroupSpellMap()
     return _groupSpellMap
 end
 
--- 查找图标所属分组索引，带帧级缓存（版本号失效）
+-- 查找图标所属分组索引（无帧级缓存，每次直接查找）
 -- 匹配顺序：直接映射命中 → base spell 归一化
+-- 不缓存原因：帧级缓存在 buff 激活/失活时序中极易产生过期 nil，
+-- 而此函数仅在 RefreshBuffViewer 遍历可见图标时调用，开销可忽略。
 function Layout:GetGroupIdxForIcon(icon)
     if not icon then return nil end
 
-    -- 命中帧级缓存（同版本直接返回，nil 也是有效的"无分组"缓存）
-    if icon._cdf_bgGroupIdxVersion == _groupSpellMapVersion then
-        return icon._cdf_bgGroupIdx
-    end
-
     local groupSpellMap = self:GetBuffGroupSpellMap()
-    local result = nil
+    if not next(groupSpellMap) then return nil end
 
-    if next(groupSpellMap) then
-        local candidates = GetSpellIDCandidatesForIcon(icon)
-        for _, spellID in ipairs(candidates) do
-            -- 直接映射
-            local gIdx = groupSpellMap[spellID]
-            if gIdx and self.buffGroupContainers and self.buffGroupContainers[gIdx] then
-                result = gIdx
-                break
-            end
-            -- base spell 归一化（候选ID本身不在映射中时）
-            if C_Spell and C_Spell.GetBaseSpell then
-                local base = C_Spell.GetBaseSpell(spellID)
-                if base and base ~= spellID then
-                    gIdx = groupSpellMap[base]
-                    if gIdx and self.buffGroupContainers and self.buffGroupContainers[gIdx] then
-                        result = gIdx
-                        break
-                    end
+    local candidates = GetSpellIDCandidatesForIcon(icon)
+    for _, spellID in ipairs(candidates) do
+        -- 直接映射
+        local gIdx = groupSpellMap[spellID]
+        if gIdx and self.buffGroupContainers and self.buffGroupContainers[gIdx] then
+            return gIdx
+        end
+        -- base spell 归一化（候选ID本身不在映射中时）
+        if C_Spell and C_Spell.GetBaseSpell then
+            local base = C_Spell.GetBaseSpell(spellID)
+            if base and base ~= spellID then
+                gIdx = groupSpellMap[base]
+                if gIdx and self.buffGroupContainers and self.buffGroupContainers[gIdx] then
+                    return gIdx
                 end
             end
         end
     end
-
-    -- 写入帧级缓存
-    icon._cdf_bgGroupIdx        = result
-    icon._cdf_bgGroupIdxVersion = _groupSpellMapVersion
-    return result
+    return nil
 end
 
 -- 临时放置：立即对分组内全部图标做正确排列 + 应用样式，无需等待全量刷新。

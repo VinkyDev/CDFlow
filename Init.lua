@@ -126,8 +126,9 @@ local function RegisterHooks()
                 if not BuffIconCooldownViewer then return end
                 if frame:GetParent() ~= BuffIconCooldownViewer then return end
                 Layout:ProvisionalPlaceInGroup(frame)
-                -- 注意：per-instance 的 OnActiveStateChanged 钩子已经调用
-                -- RequestBuffViewerRefresh，此处不重复排队
+                -- per-instance HookScript 对 OnActiveStateChanged（CDM 自定义 Lua 方法）
+                -- 静默失败，必须在此处统一触发刷新，确保每次 buff 激活/失活都重新居中
+                RequestBuffViewerRefresh()
             end)
         end
     end
