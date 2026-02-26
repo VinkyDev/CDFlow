@@ -17,6 +17,9 @@ ns.defaults = {
 
     -- 追踪状态栏
     trackedBars = {
+        anchor           = "CENTER",
+        x                = 0,
+        y                = 0,
         growDir          = "CENTER",
         barHeight        = 20,
         spacing          = 2,

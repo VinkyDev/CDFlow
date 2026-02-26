@@ -10,6 +10,122 @@ local IM = ns.ItemMonitor
 local buffRefreshPending = false
 local trackedBarsRefreshPending = false
 local RequestTrackedBarsRefresh  -- 前向声明，供 HookTrackedBarChildren 内的闭包捕获
+local trackedBarsProxyFrame
+
+local function IsManagedTrackedBarsEnabled()
+    -- 固定由 CDFlow 接管 TrackedBars 编辑定位（不再提供用户开关）
+    return ns.db and ns.db.modules and ns.db.modules.trackedBars and ns.db.trackedBars
+end
+
+local function GetTrackedBarsViewerSafe()
+    if Layout and Layout.GetTrackedBarsViewer then
+        return Layout:GetTrackedBarsViewer()
+    end
+    return _G.BuffBarCooldownViewer
+end
+
+local function MirrorProxyToViewer(proxy)
+    local viewer = GetTrackedBarsViewerSafe()
+    if not (proxy and viewer and viewer:IsShown()) then return end
+
+    local point, _, _, x, y = proxy:GetPoint(1)
+    point = point or "CENTER"
+    x, y = x or 0, y or 0
+
+    viewer:ClearAllPoints()
+    viewer:SetPoint(point, UIParent, point, x, y)
+end
+
+local function SyncTrackedBarsPosToWoWLayout()
+    -- 通过同步代理点到系统 viewer 点位，让 WoW EditMode 保存流程读取同一位置。
+    if trackedBarsProxyFrame and trackedBarsProxyFrame:IsShown() then
+        MirrorProxyToViewer(trackedBarsProxyFrame)
+    end
+end
+
+local function SaveTrackedBarsManagedPoint(anchor, x, y)
+    if not (Layout and Layout.SetTrackedBarsManagedPoint and IsManagedTrackedBarsEnabled()) then return end
+    Layout:SetTrackedBarsManagedPoint(anchor, x, y)
+end
+
+local function CaptureViewerPointToManagedCfg()
+    if not IsManagedTrackedBarsEnabled() then return end
+    local viewer = GetTrackedBarsViewerSafe()
+    if not viewer then return end
+
+    local p, _, _, x, y = viewer:GetPoint(1)
+    SaveTrackedBarsManagedPoint(p or "CENTER", x or 0, y or 0)
+end
+
+local function EnsureTrackedBarsProxyFrame()
+    if trackedBarsProxyFrame then return trackedBarsProxyFrame end
+
+    local f = CreateFrame("Frame", "CDFTrackedBarsProxyFrame", UIParent, "BackdropTemplate")
+    f:SetFrameStrata("DIALOG")
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetClampedToScreen(true)
+    f:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    f:SetBackdropColor(0, 0.7, 1, 0.10)
+    f:SetBackdropBorderColor(0, 0.7, 1, 0.95)
+
+    local label = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("TOP", f, "BOTTOM", 0, -2)
+    label:SetText("|cff66ccffCDFlow TrackedBars|r")
+    f._posLabel = label
+
+    f:SetScript("OnDragStart", function(self)
+        if InCombatLockdown() then return end
+        self:StartMoving()
+        self:SetScript("OnUpdate", function()
+            MirrorProxyToViewer(self)
+        end)
+    end)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        self:SetScript("OnUpdate", nil)
+        local p, _, _, x, y = self:GetPoint(1)
+        SaveTrackedBarsManagedPoint(p or "CENTER", x or 0, y or 0)
+        SyncTrackedBarsPosToWoWLayout()
+        RequestTrackedBarsRefresh()
+    end)
+
+    f:Hide()
+    trackedBarsProxyFrame = f
+    return f
+end
+
+local function ShowTrackedBarsProxy()
+    if not (ns.db and ns.db.modules and ns.db.modules.trackedBars and IsManagedTrackedBarsEnabled()) then return end
+    if InCombatLockdown() then return end
+
+    local viewer = GetTrackedBarsViewerSafe()
+    if not viewer then return end
+
+    local proxy = EnsureTrackedBarsProxyFrame()
+    local point, x, y = "CENTER", 0, 0
+    if Layout and Layout.GetTrackedBarsManagedPoint then
+        point, x, y = Layout:GetTrackedBarsManagedPoint()
+    end
+
+    proxy:ClearAllPoints()
+    proxy:SetPoint(point, UIParent, point, x or 0, y or 0)
+    proxy:SetSize(math.max(20, viewer:GetWidth() or 20), math.max(20, viewer:GetHeight() or 20))
+    proxy:Show()
+    MirrorProxyToViewer(proxy)
+end
+
+local function HideTrackedBarsProxy()
+    if trackedBarsProxyFrame then
+        trackedBarsProxyFrame:Hide()
+        trackedBarsProxyFrame:SetScript("OnUpdate", nil)
+    end
+end
 
 local function HookBuffChildren()
     local viewer = BuffIconCooldownViewer
@@ -194,9 +310,13 @@ local function RegisterEventRegistryCallbacks(mods)
     end)
 
     EventRegistry:RegisterCallback("EditMode.Enter", function()
+        CaptureViewerPointToManagedCfg()
+        ShowTrackedBarsProxy()
         RequestRefreshAll(0)
     end)
     EventRegistry:RegisterCallback("EditMode.Exit", function()
+        HideTrackedBarsProxy()
+        SyncTrackedBarsPosToWoWLayout()
         RequestRefreshAll(0)
     end)
 end
@@ -286,6 +406,11 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
     if mods.cdmBeautify then
         eventHandlers["EDIT_MODE_LAYOUTS_UPDATED"] = function()
+            if IsManagedTrackedBarsEnabled() and trackedBarsProxyFrame and trackedBarsProxyFrame:IsShown() then
+                local p, _, _, x, y = trackedBarsProxyFrame:GetPoint(1)
+                SaveTrackedBarsManagedPoint(p or "CENTER", x or 0, y or 0)
+                SyncTrackedBarsPosToWoWLayout()
+            end
             RequestRefreshAll(0)
         end
 

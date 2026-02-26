@@ -81,6 +81,10 @@ function ns.BuildTrackedBarsTab(scroll)
 
     -- ---- 布局区块 ----
     UI.AddHeading(scroll, L.tbLayout)
+    local tbNotice = AceGUI:Create("Label")
+    tbNotice:SetFullWidth(true)
+    tbNotice:SetText("|cffaaaaaa" .. (L.tbEditModeNotice or "") .. "|r")
+    scroll:AddChild(tbNotice)
 
     UI.AddDropdown(scroll, L.trackedBarsGrowDir, UI.TRACKED_BARS_DIR_ITEMS,
         { "CENTER", "TOP", "BOTTOM" },

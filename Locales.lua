@@ -90,6 +90,10 @@ local S = {
     tbDurationText       = { "时长文字",         "Duration Text" },
     tbShowName           = { "显示技能名称",     "Show Spell Name" },
     tbShowDuration       = { "显示剩余时长",     "Show Duration" },
+    tbEditModeNotice     = {
+        "编辑模式定位由 CDFlow 固定接管：拖拽的是 CDFlow 代理锚点，位置保存到插件配置并同步到系统布局，用于减少圈选区域与实际显示区域差异导致的偏移。",
+        "TrackedBars positioning in Edit Mode is always managed by CDFlow: you drag a CDFlow proxy anchor, and the position is saved to addon config then synced to system layout to reduce drift caused by selection-vs-rendered-area mismatch."
+    },
 
     -- 描边选项
     outNone         = { "无",           "None" },

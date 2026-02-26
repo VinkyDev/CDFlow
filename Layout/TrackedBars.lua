@@ -8,51 +8,48 @@ local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 -- 借用 Layout.lua 暴露的缓存锚点工具函数
 local SetPointCached = Layout._SetPointCached
 
-local function _vertOffset(p)
-    if p == "TOP" or p == "TOPLEFT" or p == "TOPRIGHT" then return 1 end
-    if p == "BOTTOM" or p == "BOTTOMLEFT" or p == "BOTTOMRIGHT" then return -1 end
-    return 0
-end
-
 ------------------------------------------------------
--- 同步 viewer 的锚点方向与高度
---
--- targetH 从配置计算（而非屏幕坐标），确保 anchor 换算精确且可逆：
---   targetH = n * barHeight + (n-1) * spacing  ← 纯配置值，运行期稳定
---   anchor 换算后 curAnchor == anchorPoint，后续刷新直接跳过，不产生漂移
+-- 同步 viewer 高度（不触碰 viewer 位置/锚点）
+-- 说明：编辑模式位置漂移的根因是运行期修改了 viewer:SetPoint。
+-- 这里仅更新高度，避免任何坐标写回影响 Edit Mode 保存结果。
 ------------------------------------------------------
-local function _syncViewerLayout(viewer, n, barHeight, spacing, growDir)
+local function _syncViewerHeight(viewer, n, barHeight, spacing)
     if n <= 0 or barHeight <= 0 then return end
     local targetH = n * barHeight + math.max(0, n - 1) * spacing
-    local anchorPoint = (growDir == "TOP") and "TOP"
-        or (growDir == "BOTTOM") and "BOTTOM"
-        or "CENTER"
-
-    local curAnchor = "CENTER"
-    local relTo = viewer:GetParent() or UIParent
-    local relPoint = "CENTER"
-    local xOfs, yOfs = 0, 0
-    if viewer:GetNumPoints() > 0 then
-        local p, rel, rp, x, y = viewer:GetPoint(1)
-        curAnchor = p or "CENTER"
-        if rel then relTo = rel end
-        if rp then relPoint = rp end
-        xOfs = x or 0
-        yOfs = y or 0
-    end
-
-    if curAnchor ~= anchorPoint then
-        local oldV = _vertOffset(curAnchor)
-        local newV = _vertOffset(anchorPoint)
-        yOfs = yOfs + (newV - oldV) * targetH / 2
-        viewer:ClearAllPoints()
-        viewer:SetPoint(anchorPoint, relTo, relPoint, xOfs, yOfs)
-    end
 
     local curH = viewer:GetHeight()
     if not curH or math.abs(curH - targetH) >= 1 then
         viewer:SetSize(viewer:GetWidth(), targetH)
     end
+end
+
+local function _normalizeAnchor(anchor)
+    if anchor == "TOP" or anchor == "BOTTOM" or anchor == "CENTER" then
+        return anchor
+    end
+    return "CENTER"
+end
+
+local function EnsureTrackedBarsViewerPoint(viewer, cfg)
+    if not viewer or not cfg then return end
+
+    if not cfg.anchor then cfg.anchor = "CENTER" end
+    if cfg.x == nil then cfg.x = 0 end
+    if cfg.y == nil then cfg.y = 0 end
+
+    local anchor = _normalizeAnchor(cfg.anchor)
+    local x = cfg.x or 0
+    local y = cfg.y or 0
+
+    if viewer:GetNumPoints() == 1 then
+        local p, relTo, relPoint, curX, curY = viewer:GetPoint(1)
+        if p == anchor and relTo == UIParent and relPoint == anchor and curX == x and curY == y then
+            return
+        end
+    end
+
+    viewer:ClearAllPoints()
+    viewer:SetPoint(anchor, UIParent, anchor, x, y)
 end
 
 -- 获取追踪条的唯一标识（用于激活顺序）
@@ -327,9 +324,12 @@ end
 -- 追踪状态栏（Tracked Bars）布局
 --
 -- 生长方向 growDir：
---   TOP    → bar[0] 固定在顶部，新条向下追加；viewer 锚定 TOP，SetSize 向下扩展
---   BOTTOM → bar[0] 固定在底部，新条向上追加；viewer 锚定 BOTTOM，SetSize 向上扩展
---   CENTER → 整组动态居中；viewer 锚定 CENTER，SetSize 向两侧均匀扩展
+--   TOP    → bar[0] 固定，新条向下追加（第一个条不动）
+--   BOTTOM → bar[0] 固定，新条向上追加（第一个条不动）
+--   CENTER → 整组动态居中
+--
+-- 实现策略：所有 bar 均使用 CENTER 锚点，但 TOP/BOTTOM 采用“首条为原点”。
+-- 这样既满足生长方向语义，又不依赖 viewer 自身锚点，不会触发位置漂移。
 ------------------------------------------------------
 function Layout:RefreshTrackedBars()
     if not (ns.db and ns.db.modules and ns.db.modules.trackedBars) then return end
@@ -343,6 +343,7 @@ function Layout:RefreshTrackedBars()
     if #bars == 0 then return end
 
     local cfg = (ns.db and ns.db.trackedBars) or ns.defaults.trackedBars
+    EnsureTrackedBarsViewerPoint(viewer, cfg)
 
     -- 应用外观样式
     for _, bar in ipairs(bars) do
@@ -357,28 +358,49 @@ function Layout:RefreshTrackedBars()
     -- 间距：优先使用配置，覆盖系统 viewer.childYPadding
     local spacing = (cfg.spacing ~= nil) and cfg.spacing or (viewer.childYPadding or 0)
     local growDir = cfg.growDir or "CENTER"
+    -- 补丁策略：编辑模式与运行时使用同一 growDir。
+    -- 这样可确保“编辑看到的位置”与“保存后实际位置”一致，避免退出编辑后跳变。
+    local layoutGrowDir = growDir
     local step = barHeight + spacing
     local n = #bars
 
     for index, bar in ipairs(bars) do
         local i = index - 1  -- 0-based
-        local anchor, y
-        if growDir == "TOP" then
-            -- bar[0] 锚定于 viewer TOP y=0，永远不动；新条在其下方追加
-            anchor = "TOP"
+        local y
+        if layoutGrowDir == "TOP" then
+            -- 以首条为原点：bar[0] 永远在 y=0，新条向下追加
             y = -i * step
-        elseif growDir == "BOTTOM" then
-            -- bar[0] 锚定于 viewer BOTTOM y=0，永远不动；新条在其上方追加
-            anchor = "BOTTOM"
+        elseif layoutGrowDir == "BOTTOM" then
+            -- 以首条为原点：bar[0] 永远在 y=0，新条向上追加
             y = i * step
         else
             -- CENTER：整组动态居中，n 变化时所有 bar 均匀重排
-            anchor = "CENTER"
             y = (n - 1) * step / 2 - i * step
         end
-        SetPointCached(bar, anchor, viewer, 0, y)
+        SetPointCached(bar, "CENTER", viewer, 0, y)
     end
 
-    -- 同步 viewer 锚点方向与高度（targetH 从配置计算，消除漂移）
-    _syncViewerLayout(viewer, n, barHeight, spacing, growDir)
+    -- 仅同步高度，不修改 viewer 位置/锚点
+    _syncViewerHeight(viewer, n, barHeight, spacing)
+end
+
+function Layout:GetTrackedBarsViewer()
+    local viewer = _G.BuffBarCooldownViewer
+    if not viewer then return nil end
+    if viewer.IsInitialized and not viewer:IsInitialized() then return nil end
+    return viewer
+end
+
+function Layout:GetTrackedBarsManagedPoint()
+    local cfg = ns.db and ns.db.trackedBars
+    if not cfg then return "CENTER", 0, 0 end
+    return _normalizeAnchor(cfg.anchor), cfg.x or 0, cfg.y or 0
+end
+
+function Layout:SetTrackedBarsManagedPoint(anchor, x, y)
+    if not (ns.db and ns.db.trackedBars) then return end
+    local cfg = ns.db.trackedBars
+    cfg.anchor = _normalizeAnchor(anchor)
+    cfg.x = x or 0
+    cfg.y = y or 0
 end
