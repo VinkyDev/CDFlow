@@ -25,6 +25,7 @@ Style\Keybind.lua
 Style\Text.lua
 Layout.lua
 Layout\BuffGroups.lua
+Layout\TrackedBars.lua
 Visibility.lua
 MonitorBars\Scanner.lua
 MonitorBars\Bars.lua

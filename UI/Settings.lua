@@ -10,16 +10,20 @@ local function GetTabList()
     }
     local mods = ns.db and ns.db.modules
     if not mods or mods.cdmBeautify then
-        tabs[#tabs + 1] = { value = "essential",   text = L.essential }
-        tabs[#tabs + 1] = { value = "utility",     text = L.utility }
-        tabs[#tabs + 1] = { value = "buffs",       text = L.buffs }
-        tabs[#tabs + 1] = { value = "buffGroups",  text = L.buffGroups }
-        tabs[#tabs + 1] = { value = "itemMonitor", text = L.itemMonitor }
-        tabs[#tabs + 1] = { value = "trackedBars", text = L.trackedBars }
-        tabs[#tabs + 1] = { value = "highlight",   text = L.highlight }
+        tabs[#tabs + 1] = { value = "essential",  text = L.essential }
+        tabs[#tabs + 1] = { value = "utility",    text = L.utility }
+        tabs[#tabs + 1] = { value = "buffs",      text = L.buffs }
+        tabs[#tabs + 1] = { value = "buffGroups", text = L.buffGroups }
+        tabs[#tabs + 1] = { value = "highlight",  text = L.highlight }
     end
     if not mods or mods.monitorBars then
         tabs[#tabs + 1] = { value = "monitorBars", text = L.monitorBars }
+    end
+    if not mods or mods.trackedBars then
+        tabs[#tabs + 1] = { value = "trackedBars", text = L.trackedBars }
+    end
+    if not mods or mods.itemMonitor then
+        tabs[#tabs + 1] = { value = "itemMonitor", text = L.itemMonitor }
     end
     tabs[#tabs + 1] = { value = "profiles", text = L.profiles }
     return tabs

@@ -46,6 +46,32 @@ function ns.BuildGeneralTab(scroll)
     descMB:SetFontObject(GameFontHighlightSmall)
     moduleGroup:AddChild(descMB)
 
+    local cbTrackedBars = AceGUI:Create("CheckBox")
+    cbTrackedBars:SetLabel(L.moduleTrackedBars)
+    cbTrackedBars:SetValue(mods.trackedBars)
+    cbTrackedBars:SetFullWidth(true)
+    cbTrackedBars:SetCallback("OnValueChanged", function(_, _, val) mods.trackedBars = val end)
+    moduleGroup:AddChild(cbTrackedBars)
+
+    local descTB = AceGUI:Create("Label")
+    descTB:SetText("    |cffaaaaaa" .. L.moduleTrackedBarsD .. "|r")
+    descTB:SetFullWidth(true)
+    descTB:SetFontObject(GameFontHighlightSmall)
+    moduleGroup:AddChild(descTB)
+
+    local cbItemMonitor = AceGUI:Create("CheckBox")
+    cbItemMonitor:SetLabel(L.moduleItemMonitor)
+    cbItemMonitor:SetValue(mods.itemMonitor)
+    cbItemMonitor:SetFullWidth(true)
+    cbItemMonitor:SetCallback("OnValueChanged", function(_, _, val) mods.itemMonitor = val end)
+    moduleGroup:AddChild(cbItemMonitor)
+
+    local descIM = AceGUI:Create("Label")
+    descIM:SetText("    |cffaaaaaa" .. L.moduleItemMonitorD .. "|r")
+    descIM:SetFullWidth(true)
+    descIM:SetFontObject(GameFontHighlightSmall)
+    moduleGroup:AddChild(descIM)
+
     if mods.cdmBeautify then
 
         UI.AddHeading(scroll, L.generalSettings)

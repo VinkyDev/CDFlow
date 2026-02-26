@@ -6,6 +6,8 @@ ns.defaults = {
     modules = {
         cdmBeautify = true,
         monitorBars = true,
+        trackedBars = true,
+        itemMonitor = true,
     },
 
     -- 全局样式

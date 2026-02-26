@@ -327,10 +327,14 @@ local S = {
     -- 功能模块
     moduleManage        = { "功能模块",                                       "Modules" },
     moduleReloadHint    = { "切换模块后需 /reload 重载界面生效",              "Module changes require /reload to take effect" },
-    moduleCDMBeautify   = { "冷却管理器美化",                                 "CDM Beautifier" },
-    moduleCDMBeautifyD  = { "图标样式、布局引擎、文字叠层、高亮特效",         "Icon style, layout engine, text overlays, highlight effects" },
+    moduleCDMBeautify   = { "冷却管理器技能、buff 强化",                      "Skills & Buffs" },
+    moduleCDMBeautifyD  = { "图标样式、布局引擎、高亮特效、Buff 分组", "Icon style, layout engine, text overlays, highlight effects, buff groups" },
     moduleMonitorBars   = { "监控条",                                         "Monitor Bars" },
     moduleMonitorBarsD  = { "自定义技能充能/冷却/Buff堆叠监控条",            "Custom spell charge/cooldown/buff stack monitor bars" },
+    moduleTrackedBars   = { "追踪状态栏美化",                                 "Tracked Bars Beautifier" },
+    moduleTrackedBarsD  = { "美化冷却管理器中追踪状态栏的外观", "Beautify the appearance of the native tracked status bars" },
+    moduleItemMonitor   = { "物品监控",                                       "Item Monitor" },
+    moduleItemMonitorD  = { "监控主动饰品，药水等冷却",         "Monitor cooldowns for active trinkets, potions, etc." },
 }
 
 -- 构建 L 表

@@ -83,7 +83,7 @@ RequestTrackedBarsRefresh = function()
     end)
 end
 
-local function RegisterHooks()
+local function RegisterCDMHooks()
     if EssentialCooldownViewer then
         hooksecurefunc(EssentialCooldownViewer, "RefreshLayout", function()
             Layout:RefreshViewer("EssentialCooldownViewer")
@@ -100,13 +100,6 @@ local function RegisterHooks()
         hooksecurefunc(BuffIconCooldownViewer, "RefreshLayout", function()
             HookBuffChildren()
             Layout:RefreshViewer("BuffIconCooldownViewer")
-        end)
-    end
-
-    if BuffBarCooldownViewer then
-        hooksecurefunc(BuffBarCooldownViewer, "RefreshLayout", function()
-            HookTrackedBarChildren()
-            Layout:RefreshTrackedBars()
         end)
     end
 
@@ -131,6 +124,15 @@ local function RegisterHooks()
                 RequestBuffViewerRefresh()
             end)
         end
+    end
+end
+
+local function RegisterTrackedBarsHooks()
+    if BuffBarCooldownViewer then
+        hooksecurefunc(BuffBarCooldownViewer, "RefreshLayout", function()
+            HookTrackedBarChildren()
+            Layout:RefreshTrackedBars()
+        end)
     end
 end
 
@@ -175,11 +177,13 @@ local function RequestRefreshAll(delay)
     end)
 end
 
-local function RegisterEventRegistryCallbacks()
+local function RegisterEventRegistryCallbacks(mods)
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
         RequestRefreshAll(0)
         C_Timer.After(0.15, RequestBuffViewerRefresh)
-        C_Timer.After(0.15, RequestTrackedBarsRefresh)
+        if mods.trackedBars then
+            C_Timer.After(0.15, RequestTrackedBarsRefresh)
+        end
         C_Timer.After(0.15, function() Layout:PositionGroupContainers() end)
     end)
 
@@ -201,6 +205,8 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
 
     ns:InitDB()
 
+    local mods = ns.db.modules
+
     local function OnProfileChanged()
         ns:OnProfileChanged()
         if ns.db.modules.cdmBeautify then
@@ -210,7 +216,7 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         if ns.db.modules.monitorBars and MB then
             MB:RebuildAllBars()
         end
-        if IM then IM:Init() end
+        if ns.db.modules.itemMonitor and IM then IM:Init() end
         if ns.Visibility then
             ns.Visibility:Initialize()
         end
@@ -220,12 +226,14 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
     ns.acedb.RegisterCallback(ns, "OnProfileCopied", function() OnProfileChanged() end)
     ns.acedb.RegisterCallback(ns, "OnProfileReset", function() OnProfileChanged() end)
 
-    local mods = ns.db.modules
-
     if mods.cdmBeautify then
-        RegisterHooks()
-        RegisterEventRegistryCallbacks()
+        RegisterCDMHooks()
+        RegisterEventRegistryCallbacks(mods)
         SetupGlowHooks()
+    end
+
+    if mods.trackedBars then
+        RegisterTrackedBarsHooks()
     end
 
     if mods.cdmBeautify and mods.monitorBars and MB then
@@ -250,7 +258,11 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
                 Layout:InitBuffGroups()  -- 容器必须在 RefreshAll 前就绪
                 Layout:RefreshAll()
             end
-            if IM then IM:Init() end
+            if mods.trackedBars then
+                HookTrackedBarChildren()
+                Layout:RefreshTrackedBars()
+            end
+            if mods.itemMonitor and IM then IM:Init() end
             if ns.Visibility then ns.Visibility:UpdateAll() end
         end)
     end
@@ -297,10 +309,10 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         end
     end
 
-    if mods.monitorBars or mods.cdmBeautify then
+    if mods.monitorBars or mods.trackedBars then
         eventHandlers["UNIT_AURA"] = function(unit)
             if mods.monitorBars then MB:OnAuraUpdate() end
-            if unit == "player" and mods.cdmBeautify then
+            if unit == "player" and mods.trackedBars then
                 RequestTrackedBarsRefresh()
             end
         end
@@ -309,11 +321,6 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
     if mods.monitorBars then
         eventHandlers["SPELL_UPDATE_CHARGES"] = function()
             MB:OnChargeUpdate()
-        end
-
-        eventHandlers["SPELL_UPDATE_COOLDOWN"] = function()
-            MB:OnCooldownUpdate()
-            if IM then IM:UpdateAllCooldowns() end
         end
 
         eventHandlers["PLAYER_REGEN_ENABLED"] = function()
@@ -329,17 +336,18 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
         end
     end
 
+    -- SPELL_UPDATE_COOLDOWN：同时服务 MonitorBars 和 ItemMonitor
+    if mods.monitorBars or (mods.itemMonitor and IM) then
+        eventHandlers["SPELL_UPDATE_COOLDOWN"] = function()
+            if mods.monitorBars then MB:OnCooldownUpdate() end
+            if mods.itemMonitor and IM then IM:UpdateAllCooldowns() end
+        end
+    end
+
     -- 物品监控事件
-    if IM then
+    if mods.itemMonitor and IM then
         eventHandlers["BAG_UPDATE_COOLDOWN"] = function()
             IM:UpdateAllCooldowns()
-        end
-
-        if not eventHandlers["SPELL_UPDATE_COOLDOWN"] then
-            -- 仅 monitorBars 关闭时需要独立注册
-            eventHandlers["SPELL_UPDATE_COOLDOWN"] = function()
-                IM:UpdateAllCooldowns()
-            end
         end
 
         eventHandlers["PLAYER_EQUIPMENT_CHANGED"] = function()
