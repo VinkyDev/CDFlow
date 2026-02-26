@@ -8,62 +8,39 @@ local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 -- 借用 Layout.lua 暴露的缓存锚点工具函数
 local SetPointCached = Layout._SetPointCached
 
-------------------------------------------------------
--- 同步 viewer 尺寸与追踪条，并按生长方向设置锚点
--- 关键：viewer 的锚点决定 SetSize 时从哪一侧扩展
---   TOP    → 锚定 TOP，向下生长
---   BOTTOM → 锚定 BOTTOM，向上生长
---   CENTER → 锚定 CENTER，向两侧扩展
-------------------------------------------------------
 local function _vertOffset(p)
     if p == "TOP" or p == "TOPLEFT" or p == "TOPRIGHT" then return 1 end
     if p == "BOTTOM" or p == "BOTTOMLEFT" or p == "BOTTOMRIGHT" then return -1 end
     return 0
 end
 
-local function UpdateViewerSizeToMatchTrackedBars(viewer, bars, growDir)
-    if not viewer or not bars or #bars == 0 then return end
-    local vScale = viewer:GetEffectiveScale()
-    if not vScale or vScale == 0 then return end
+------------------------------------------------------
+-- 同步 viewer 的锚点方向与高度
+--
+-- targetH 从配置计算（而非屏幕坐标），确保 anchor 换算精确且可逆：
+--   targetH = n * barHeight + (n-1) * spacing  ← 纯配置值，运行期稳定
+--   anchor 换算后 curAnchor == anchorPoint，后续刷新直接跳过，不产生漂移
+------------------------------------------------------
+local function _syncViewerLayout(viewer, n, barHeight, spacing, growDir)
+    if n <= 0 or barHeight <= 0 then return end
+    local targetH = n * barHeight + math.max(0, n - 1) * spacing
+    local anchorPoint = (growDir == "TOP") and "TOP"
+        or (growDir == "BOTTOM") and "BOTTOM"
+        or "CENTER"
 
-    local left, right, top, bottom = 999999, 0, 0, 999999
-    for _, bar in ipairs(bars) do
-        if bar and bar:IsShown() then
-            local scale = bar:GetEffectiveScale() / vScale
-            local l = (bar:GetLeft() or 0) * scale
-            local r = (bar:GetRight() or 0) * scale
-            local t = (bar:GetTop() or 0) * scale
-            local b = (bar:GetBottom() or 0) * scale
-            if l < left then left = l end
-            if r > right then right = r end
-            if t > top then top = t end
-            if b < bottom then bottom = b end
-        end
-    end
-
-    if left >= right or bottom >= top then return end
-
-    local targetW = right - left
-    local targetH = top - bottom
-
-    local anchorPoint = (growDir == "TOP") and "TOP" or (growDir == "BOTTOM") and "BOTTOM" or "CENTER"
-
-    local numPoints = viewer:GetNumPoints()
+    local curAnchor = "CENTER"
     local relTo = viewer:GetParent() or UIParent
     local relPoint = "CENTER"
     local xOfs, yOfs = 0, 0
-    local curAnchor = "CENTER"
-    if numPoints > 0 then
-        local point, rel, rp, x, y = viewer:GetPoint(1)
-        curAnchor = point or "CENTER"
+    if viewer:GetNumPoints() > 0 then
+        local p, rel, rp, x, y = viewer:GetPoint(1)
+        curAnchor = p or "CENTER"
         if rel then relTo = rel end
         if rp then relPoint = rp end
         xOfs = x or 0
         yOfs = y or 0
     end
 
-    -- 当锚点需要变化时始终纠正，使用 targetH 确保坐标转换准确
-    -- 保留 Edit Mode 的 relTo/relPoint，仅调整 viewer 自身的锚点与 y 偏移
     if curAnchor ~= anchorPoint then
         local oldV = _vertOffset(curAnchor)
         local newV = _vertOffset(anchorPoint)
@@ -72,11 +49,9 @@ local function UpdateViewerSizeToMatchTrackedBars(viewer, bars, growDir)
         viewer:SetPoint(anchorPoint, relTo, relPoint, xOfs, yOfs)
     end
 
-    -- 尺寸发生变化时才调用 SetSize
-    local curW = viewer:GetWidth()
     local curH = viewer:GetHeight()
-    if curW and curH and (math.abs(curW - targetW) >= 1 or math.abs(curH - targetH) >= 1) then
-        viewer:SetSize(targetW, targetH)
+    if not curH or math.abs(curH - targetH) >= 1 then
+        viewer:SetSize(viewer:GetWidth(), targetH)
     end
 end
 
@@ -351,10 +326,10 @@ end
 ------------------------------------------------------
 -- 追踪状态栏（Tracked Bars）布局
 --
--- 生长方向 growDir（与 Buff 配置类似）：
---   TOP    → 第一个条在区域顶部，新条在其下方追加
---   CENTER → 第一个条在区域中间；新条出现时整组始终居中
---   BOTTOM → 第一个条在区域底部，新条在其上方追加
+-- 生长方向 growDir：
+--   TOP    → bar[0] 固定在顶部，新条向下追加；viewer 锚定 TOP，SetSize 向下扩展
+--   BOTTOM → bar[0] 固定在底部，新条向上追加；viewer 锚定 BOTTOM，SetSize 向上扩展
+--   CENTER → 整组动态居中；viewer 锚定 CENTER，SetSize 向两侧均匀扩展
 ------------------------------------------------------
 function Layout:RefreshTrackedBars()
     if not (ns.db and ns.db.modules and ns.db.modules.trackedBars) then return end
@@ -387,27 +362,23 @@ function Layout:RefreshTrackedBars()
 
     for index, bar in ipairs(bars) do
         local i = index - 1  -- 0-based
-        local y
-        local anchor
-
+        local anchor, y
         if growDir == "TOP" then
-            -- 从上到下：第一个在顶部，后续在其下方追加
+            -- bar[0] 锚定于 viewer TOP y=0，永远不动；新条在其下方追加
             anchor = "TOP"
             y = -i * step
         elseif growDir == "BOTTOM" then
-            -- 从下到上：第一个在底部，后续在其上方追加
+            -- bar[0] 锚定于 viewer BOTTOM y=0，永远不动；新条在其上方追加
             anchor = "BOTTOM"
             y = i * step
         else
-            -- 居中：整组始终居中于区域
-            -- 第一个条在组顶部，最后一个在组底部，组中心对齐 viewer 中心
+            -- CENTER：整组动态居中，n 变化时所有 bar 均匀重排
             anchor = "CENTER"
             y = (n - 1) * step / 2 - i * step
         end
-
         SetPointCached(bar, anchor, viewer, 0, y)
     end
 
-    -- 同步 viewer 尺寸与条边界，并按生长方向设置锚点（使扩展从正确方向发生）
-    UpdateViewerSizeToMatchTrackedBars(viewer, bars, growDir)
+    -- 同步 viewer 锚点方向与高度（targetH 从配置计算，消除漂移）
+    _syncViewerLayout(viewer, n, barHeight, spacing, growDir)
 end
