@@ -156,6 +156,12 @@ end
 --   BOTTOM → 锚定 BOTTOM，向上生长
 --   CENTER → 锚定 CENTER，向两侧扩展
 ------------------------------------------------------
+local function _vertOffset(p)
+    if p == "TOP" or p == "TOPLEFT" or p == "TOPRIGHT" then return 1 end
+    if p == "BOTTOM" or p == "BOTTOMLEFT" or p == "BOTTOMRIGHT" then return -1 end
+    return 0
+end
+
 local function UpdateViewerSizeToMatchTrackedBars(viewer, bars, growDir)
     if not viewer or not bars or #bars == 0 then return end
     local vScale = viewer:GetEffectiveScale()
@@ -180,39 +186,37 @@ local function UpdateViewerSizeToMatchTrackedBars(viewer, bars, growDir)
 
     local targetW = right - left
     local targetH = top - bottom
+
+    local anchorPoint = (growDir == "TOP") and "TOP" or (growDir == "BOTTOM") and "BOTTOM" or "CENTER"
+
+    local numPoints = viewer:GetNumPoints()
+    local relTo = viewer:GetParent() or UIParent
+    local relPoint = "CENTER"
+    local xOfs, yOfs = 0, 0
+    local curAnchor = "CENTER"
+    if numPoints > 0 then
+        local point, rel, rp, x, y = viewer:GetPoint(1)
+        curAnchor = point or "CENTER"
+        if rel then relTo = rel end
+        if rp then relPoint = rp end
+        xOfs = x or 0
+        yOfs = y or 0
+    end
+
+    -- 当锚点需要变化时始终纠正，使用 targetH 确保坐标转换准确
+    -- 保留 Edit Mode 的 relTo/relPoint，仅调整 viewer 自身的锚点与 y 偏移
+    if curAnchor ~= anchorPoint then
+        local oldV = _vertOffset(curAnchor)
+        local newV = _vertOffset(anchorPoint)
+        yOfs = yOfs + (newV - oldV) * targetH / 2
+        viewer:ClearAllPoints()
+        viewer:SetPoint(anchorPoint, relTo, relPoint, xOfs, yOfs)
+    end
+
+    -- 尺寸发生变化时才调用 SetSize
     local curW = viewer:GetWidth()
     local curH = viewer:GetHeight()
     if curW and curH and (math.abs(curW - targetW) >= 1 or math.abs(curH - targetH) >= 1) then
-        local parent = viewer:GetParent()
-        if not parent then parent = UIParent end
-
-        local relTo = parent
-        local relPoint = "CENTER"
-        local xOfs, yOfs = 0, 0
-        local numPoints = viewer:GetNumPoints()
-        if numPoints > 0 then
-            local _, rel, rp, x, y = viewer:GetPoint(1)
-            if rel then relTo = rel end
-            if rp then relPoint = rp end
-            xOfs, yOfs = x or 0, y or 0
-        end
-
-        -- 在 SetSize 前重设锚点，使 viewer 从正确方向生长
-        local anchorPoint = (growDir == "TOP") and "TOP" or (growDir == "BOTTOM") and "BOTTOM" or "CENTER"
-        -- 关键：保留 Edit Mode 的 relTo/relPoint，仅调整 viewer 的锚点与 y 偏移
-        -- 避免覆盖用户保存的位置（防止退出编辑模式后位置上移）
-        local function vertOffset(p)
-            if p == "TOP" or p == "TOPLEFT" or p == "TOPRIGHT" then return 1 end
-            if p == "BOTTOM" or p == "BOTTOMLEFT" or p == "BOTTOMRIGHT" then return -1 end
-            return 0
-        end
-        local oldPoint = (numPoints > 0) and (select(1, viewer:GetPoint(1))) or "CENTER"
-        local oldV, newV = vertOffset(oldPoint), vertOffset(anchorPoint)
-        local dy = (newV - oldV) * curH / 2
-        local newY = yOfs + dy
-
-        viewer:ClearAllPoints()
-        viewer:SetPoint(anchorPoint, relTo, relPoint, xOfs, newY)
         viewer:SetSize(targetW, targetH)
     end
 end

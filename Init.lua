@@ -8,6 +8,7 @@ local MB = ns.MonitorBars
 
 local buffRefreshPending = false
 local trackedBarsRefreshPending = false
+local RequestTrackedBarsRefresh  -- 前向声明，供 HookTrackedBarChildren 内的闭包捕获
 
 local function HookBuffChildren()
     local viewer = BuffIconCooldownViewer
@@ -57,7 +58,13 @@ local function HookTrackedBarChildren()
         if frame and not frame._cdf_tb_hooked then
             frame._cdf_tb_hooked = true
             if frame.HookScript then
-                for _, script in ipairs({ "OnActiveStateChanged", "OnUnitAuraAddedEvent", "OnUnitAuraRemovedEvent", "OnShow" }) do
+                -- OnShow：同步立即重排，消除新条出现时的首帧闪烁
+                pcall(frame.HookScript, frame, "OnShow", function()
+                    Layout:RefreshTrackedBars()
+                    RequestTrackedBarsRefresh()  -- 延迟同步 viewer 尺寸
+                end)
+                -- 其他事件：防抖刷新
+                for _, script in ipairs({ "OnActiveStateChanged", "OnUnitAuraAddedEvent", "OnUnitAuraRemovedEvent" }) do
                     pcall(frame.HookScript, frame, script, RequestTrackedBarsRefresh)
                 end
             end
@@ -65,7 +72,7 @@ local function HookTrackedBarChildren()
     end
 end
 
-local function RequestTrackedBarsRefresh()
+RequestTrackedBarsRefresh = function()
     if trackedBarsRefreshPending then return end
     trackedBarsRefreshPending = true
     C_Timer.After(0.05, function()
