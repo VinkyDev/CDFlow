@@ -150,7 +150,10 @@ function Style:ApplySwipeOverlay(button)
             local key = b._cdf_viewerKey
             local cfg = key and ns.db and ns.db[key] and ns.db[key].swipeOverlay
             if not cfg or not cfg.enabled then return end
-            local c = b.wasSetFromAura and cfg.activeAuraColor or cfg.cdSwipeColor
+            -- Buff 仅保留冷却遮罩色；技能查看器按激活/冷却区分遮罩色
+            local c = (key == "buffs" or not cfg.activeAuraColor)
+                and cfg.cdSwipeColor
+                or (b.wasSetFromAura and cfg.activeAuraColor or cfg.cdSwipeColor)
             self:SetSwipeColor(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
         end)
         button._cdf_swipeHooked = true

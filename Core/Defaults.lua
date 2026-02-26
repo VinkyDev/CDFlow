@@ -173,7 +173,6 @@ ns.defaults = {
         },
         swipeOverlay = {
             enabled         = false,
-            activeAuraColor = { 1, 0.95, 0.57, 0.69 },
             cdSwipeColor    = { 0, 0, 0, 0.69 },
         },
     },

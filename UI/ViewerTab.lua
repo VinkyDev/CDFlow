@@ -129,9 +129,12 @@ local function BuildSwipeOverlaySection(scroll, viewerKey)
             return
         end
 
-        UI.AddColorPicker(container, L.swipeActiveColor,
-            function() return cfg.activeAuraColor end,
-            function(r, g, b, a) cfg.activeAuraColor = { r, g, b, a } end)
+        -- Buff 无“激活状态遮罩色”，仅保留冷却遮罩色
+        if viewerKey ~= "buffs" then
+            UI.AddColorPicker(container, L.swipeActiveColor,
+                function() return cfg.activeAuraColor end,
+                function(r, g, b, a) cfg.activeAuraColor = { r, g, b, a } end)
+        end
 
         UI.AddColorPicker(container, L.swipeCDColor,
             function() return cfg.cdSwipeColor end,
