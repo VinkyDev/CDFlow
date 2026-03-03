@@ -701,9 +701,18 @@ local function ApplySegmentColors(barFrame, currentCount)
     local segs = barFrame._segments
     if not segs then return end
 
-    local threshold = cfg.colorThreshold or 0
-    local useThreshold = threshold > 0 and type(currentCount) == "number" and currentCount >= threshold
-    local c = useThreshold and (cfg.thresholdColor or { 1, 0.5, 0, 1 }) or (cfg.barColor or { 0.2, 0.8, 0.2, 1 })
+    local threshold1 = cfg.colorThreshold or 0
+    local threshold2 = cfg.colorThreshold2 or 0
+    local c = cfg.barColor or { 0.2, 0.8, 0.2, 1 }
+
+    if type(currentCount) == "number" then
+        -- 优先判断第二段阈值（更高的阈值）
+        if threshold2 > 0 and currentCount >= threshold2 then
+            c = cfg.thresholdColor2 or { 1, 0, 0, 1 }
+        elseif threshold1 > 0 and currentCount >= threshold1 then
+            c = cfg.thresholdColor or { 1, 0.5, 0, 1 }
+        end
+    end
 
     for _, seg in ipairs(segs) do
         seg:SetStatusBarColor(c[1], c[2], c[3], c[4])

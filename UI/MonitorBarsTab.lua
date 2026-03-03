@@ -130,6 +130,8 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         barTexture = "Solid",
         colorThreshold  = 0,
         thresholdColor  = { 1.0, 0.5, 0.0, 1 },
+        colorThreshold2 = 0,
+        thresholdColor2 = { 1.0, 0.0, 0.0, 1 },
         borderStyle     = "whole",
         segmentGap      = 1,
         hideFromCDM     = false,
@@ -451,6 +453,9 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     barColorPicker:SetCallback("OnValueConfirmed", OnBarColor)
     styleGroup:AddChild(barColorPicker)
 
+    -- 声明第二段阈值控件的引用，以便在第一段阈值变化时更新它们的状态
+    local thresholdSlider2, thresholdColorPicker2
+
     local maxVal = barCfg.barType == "charge" and (barCfg.maxCharges > 0 and barCfg.maxCharges or 10) or (barCfg.maxStacks or 30)
     local thresholdSlider = AceGUI:Create("Slider")
     thresholdSlider:SetLabel(L.mbColorThreshold)
@@ -458,8 +463,16 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     thresholdSlider:SetValue(barCfg.colorThreshold or 0)
     thresholdSlider:SetFullWidth(true)
     thresholdSlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.colorThreshold = math.floor(val)
+        local newVal = math.floor(val)
+        barCfg.colorThreshold = newVal
         MB:RebuildAllBars()
+        -- 根据第一段阈值启用/禁用第二段阈值控件
+        if thresholdSlider2 then
+            thresholdSlider2:SetDisabled(newVal == 0)
+        end
+        if thresholdColorPicker2 then
+            thresholdColorPicker2:SetDisabled(newVal == 0)
+        end
     end)
     styleGroup:AddChild(thresholdSlider)
 
@@ -481,6 +494,39 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     thresholdColorPicker:SetCallback("OnValueChanged", OnThresholdColor)
     thresholdColorPicker:SetCallback("OnValueConfirmed", OnThresholdColor)
     styleGroup:AddChild(thresholdColorPicker)
+
+    -- 第二段阈值（始终显示，但在第一段阈值为 0 时禁用）
+    thresholdSlider2 = AceGUI:Create("Slider")
+    thresholdSlider2:SetLabel(L.mbColorThreshold2)
+    thresholdSlider2:SetSliderValues(0, maxVal, 1)
+    thresholdSlider2:SetValue(barCfg.colorThreshold2 or 0)
+    thresholdSlider2:SetFullWidth(true)
+    thresholdSlider2:SetDisabled((barCfg.colorThreshold or 0) == 0)
+    thresholdSlider2:SetCallback("OnValueChanged", function(_, _, val)
+        barCfg.colorThreshold2 = math.floor(val)
+        MB:RebuildAllBars()
+    end)
+    styleGroup:AddChild(thresholdSlider2)
+
+    local thresholdTip2 = AceGUI:Create("Label")
+    thresholdTip2:SetText("|cffaaaaaa" .. L.mbColorThresholdTip2 .. "|r")
+    thresholdTip2:SetFullWidth(true)
+    thresholdTip2:SetFontObject(GameFontHighlightSmall)
+    styleGroup:AddChild(thresholdTip2)
+
+    thresholdColorPicker2 = AceGUI:Create("ColorPicker")
+    thresholdColorPicker2:SetLabel(L.mbThresholdColor2)
+    thresholdColorPicker2:SetHasAlpha(true)
+    local tc2 = barCfg.thresholdColor2 or { 1.0, 0.0, 0.0, 1 }
+    thresholdColorPicker2:SetColor(tc2[1], tc2[2], tc2[3], tc2[4])
+    thresholdColorPicker2:SetDisabled((barCfg.colorThreshold or 0) == 0)
+    local function OnThresholdColor2(_, _, r, g, b, a)
+        barCfg.thresholdColor2 = { r, g, b, a }
+        MB:RebuildAllBars()
+    end
+    thresholdColorPicker2:SetCallback("OnValueChanged", OnThresholdColor2)
+    thresholdColorPicker2:SetCallback("OnValueConfirmed", OnThresholdColor2)
+    styleGroup:AddChild(thresholdColorPicker2)
 
     local bgColorPicker = AceGUI:Create("ColorPicker")
     bgColorPicker:SetLabel(L.mbBgColor)
