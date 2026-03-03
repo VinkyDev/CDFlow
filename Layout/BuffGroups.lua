@@ -392,25 +392,37 @@ function Layout:RefreshBuffGroups(groupBuckets, w, h, cfg)
         local count = icons and #icons or 0
 
         if group and container and count > 0 then
+            -- 使用分组自定义尺寸（如果启用了覆盖）
+            local iconW = (group.overrideSize and group.iconWidth) or w
+            local iconH = (group.overrideSize and group.iconHeight) or h
+
             if group.horizontal ~= false then
                 -- 水平居中排列
-                local totalW = count * w + (count - 1) * spacingX
-                local startX = -(totalW / 2) + w / 2
-                container:SetSize(totalW, h)
+                local totalW = count * iconW + (count - 1) * spacingX
+                local startX = -(totalW / 2) + iconW / 2
+                container:SetSize(totalW, iconH)
                 for i, icon in ipairs(icons) do
                     icon:ClearAllPoints()
                     icon:SetPoint("CENTER", container, "CENTER",
-                        startX + (i - 1) * (w + spacingX), 0)
+                        startX + (i - 1) * (iconW + spacingX), 0)
+                    -- 应用自定义尺寸到图标
+                    if group.overrideSize then
+                        icon:SetSize(iconW, iconH)
+                    end
                 end
             else
                 -- 垂直向下排列（顶部居中）
-                local totalH = count * h + (count - 1) * spacingY
-                local startY = (totalH / 2) - h / 2
-                container:SetSize(w, totalH)
+                local totalH = count * iconH + (count - 1) * spacingY
+                local startY = (totalH / 2) - iconH / 2
+                container:SetSize(iconW, totalH)
                 for i, icon in ipairs(icons) do
                     icon:ClearAllPoints()
                     icon:SetPoint("CENTER", container, "CENTER",
-                        0, startY - (i - 1) * (h + spacingY))
+                        0, startY - (i - 1) * (iconH + spacingY))
+                    -- 应用自定义尺寸到图标
+                    if group.overrideSize then
+                        icon:SetSize(iconW, iconH)
+                    end
                 end
             end
         end

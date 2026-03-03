@@ -167,6 +167,60 @@ local function BuildGroupConfig(container, groupIdx, rebuildTab)
     end)
     container:AddChild(layoutDD)
 
+    -- 尺寸覆盖
+    local overrideSizeCB = aceGUI:Create("CheckBox")
+    overrideSizeCB:SetLabel(L.bgOverrideSize)
+    overrideSizeCB:SetValue(group.overrideSize or false)
+    overrideSizeCB:SetFullWidth(true)
+    overrideSizeCB:SetCallback("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget.frame, "ANCHOR_TOPRIGHT")
+        GameTooltip:SetText(L.bgOverrideSizeTip, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    overrideSizeCB:SetCallback("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    container:AddChild(overrideSizeCB)
+
+    -- 声明尺寸滑块的引用，以便在复选框变化时更新它们的状态
+    local widthSlider, heightSlider
+
+    local widthSlider = aceGUI:Create("Slider")
+    widthSlider:SetLabel(L.bgIconWidth)
+    widthSlider:SetSliderValues(20, 100, 1)
+    widthSlider:SetValue(group.iconWidth or 40)
+    widthSlider:SetFullWidth(true)
+    widthSlider:SetDisabled(not (group.overrideSize or false))
+    widthSlider:SetCallback("OnValueChanged", function(_, _, val)
+        group.iconWidth = math.floor(val)
+        RefreshBuffView()
+    end)
+    container:AddChild(widthSlider)
+
+    local heightSlider = aceGUI:Create("Slider")
+    heightSlider:SetLabel(L.bgIconHeight)
+    heightSlider:SetSliderValues(20, 100, 1)
+    heightSlider:SetValue(group.iconHeight or 40)
+    heightSlider:SetFullWidth(true)
+    heightSlider:SetDisabled(not (group.overrideSize or false))
+    heightSlider:SetCallback("OnValueChanged", function(_, _, val)
+        group.iconHeight = math.floor(val)
+        RefreshBuffView()
+    end)
+    container:AddChild(heightSlider)
+
+    -- 更新复选框回调，启用/禁用尺寸滑块
+    overrideSizeCB:SetCallback("OnValueChanged", function(_, _, val)
+        group.overrideSize = val
+        if widthSlider then
+            widthSlider:SetDisabled(not val)
+        end
+        if heightSlider then
+            heightSlider:SetDisabled(not val)
+        end
+        RefreshBuffView()
+    end)
+
     -- 载入职业
     local classItems, classOrder = GetClassItems()
     local classDD = aceGUI:Create("Dropdown")
