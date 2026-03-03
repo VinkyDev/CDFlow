@@ -6,6 +6,19 @@ local MB  = ns.MonitorBars
 local AceGUI
 local LSM
 
+local MASK_AND_BORDER_STYLE_ITEMS = {
+    ["1px"] = L.mbStyle1px,
+    ["Thin"] = L.mbStyleThin,
+    ["Medium"] = L.mbStyleMedium,
+    ["Thick"] = L.mbStyleThick,
+    ["None"] = L.mbStyleNone,
+}
+
+local BORDER_STYLE_ITEMS = {
+    ["whole"] = L.mbBorderWhole,
+    ["segment"] = L.mbBorderSegment,
+}
+
 local OUTLINE_ITEMS = {
     ["NONE"]         = L.outNone,
     ["OUTLINE"]      = L.outOutline,
@@ -51,6 +64,11 @@ local CLASS_TAG_ORDER = {
 
 local selectedBarIndex = 1
 local PLAYER_CLASS_TAG = select(2, UnitClass("player"))
+
+local function RoundToOneDecimal(num)
+    if type(num) ~= "number" then return num end
+    return math.floor(num * 10 + 0.5) / 10
+end
 
 local function IsClassMatchedForCurrentPlayer(classTag)
     if classTag == nil or classTag == "" or classTag == "ALL" then
@@ -100,7 +118,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         barColor    = { 0.2, 0.8, 0.2, 1 },
         bgColor     = { 0.1, 0.1, 0.1, 0.6 },
         borderColor = { 0, 0, 0, 1 },
-        borderSize  = 1,
+        maskAndBorderStyle = "1px",
         showIcon   = true,
         showText   = true,
         textAlign  = "RIGHT",
@@ -150,6 +168,22 @@ local function GetBarDropdownList(cfg)
 end
 
 local function BuildBarConfig(container, barCfg, rebuildAll)
+    barCfg.width = tonumber(barCfg.width) or 200
+    barCfg.height = tonumber(barCfg.height) or 20
+    barCfg.posX = tonumber(barCfg.posX) or 0
+    barCfg.posY = tonumber(barCfg.posY) or 0
+
+    -- Migration for legacy settings
+    if not barCfg.maskAndBorderStyle then
+        if barCfg.borderSize and barCfg.borderSize > 1 then
+            barCfg.maskAndBorderStyle = "Thin"
+        elseif barCfg.borderSize and barCfg.borderSize == 0 then
+            barCfg.maskAndBorderStyle = "None"
+        else
+            barCfg.maskAndBorderStyle = "1px"
+        end
+    end
+
     local function Refresh()
         local f = MB:GetActiveFrame(barCfg.id)
         if f then MB:ApplyStyle(f) end
@@ -370,22 +404,22 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     local wSlider = AceGUI:Create("Slider")
     wSlider:SetLabel(L.mbBarWidth)
-    wSlider:SetSliderValues(60, 500, 1)
+    wSlider:SetSliderValues(60, 500, 0.1)
     wSlider:SetValue(barCfg.width)
     wSlider:SetFullWidth(true)
     wSlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.width = math.floor(val)
+        barCfg.width = RoundToOneDecimal(val)
         MB:RebuildAllBars()
     end)
     styleGroup:AddChild(wSlider)
 
     local hSlider = AceGUI:Create("Slider")
     hSlider:SetLabel(L.mbBarHeight)
-    hSlider:SetSliderValues(6, 60, 1)
+    hSlider:SetSliderValues(6, 60, 0.1)
     hSlider:SetValue(barCfg.height)
     hSlider:SetFullWidth(true)
     hSlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.height = math.floor(val)
+        barCfg.height = RoundToOneDecimal(val)
         MB:RebuildAllBars()
     end)
     styleGroup:AddChild(hSlider)
@@ -474,21 +508,6 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     borderColorPicker:SetCallback("OnValueConfirmed", OnBorderColor)
     styleGroup:AddChild(borderColorPicker)
 
-    local borderSlider = AceGUI:Create("Slider")
-    borderSlider:SetLabel(L.mbBorderSize)
-    borderSlider:SetSliderValues(0, 4, 1)
-    borderSlider:SetValue(barCfg.borderSize or 1)
-    borderSlider:SetFullWidth(true)
-    borderSlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.borderSize = math.floor(val)
-        MB:RebuildAllBars()
-    end)
-    styleGroup:AddChild(borderSlider)
-
-    local BORDER_STYLE_ITEMS = {
-        ["whole"]   = L.mbBorderWhole,
-        ["segment"] = L.mbBorderSegment,
-    }
     local borderStyleDD = AceGUI:Create("Dropdown")
     borderStyleDD:SetLabel(L.mbBorderStyle)
     borderStyleDD:SetList(BORDER_STYLE_ITEMS, { "whole", "segment" })
@@ -497,8 +516,22 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     borderStyleDD:SetCallback("OnValueChanged", function(_, _, val)
         barCfg.borderStyle = val
         MB:RebuildAllBars()
+        rebuildAll()
     end)
     styleGroup:AddChild(borderStyleDD)
+
+    if (barCfg.borderStyle or "whole") == "whole" then
+        local mbsDD = AceGUI:Create("Dropdown")
+        mbsDD:SetLabel(L.mbMaskAndBorderStyle or "Border Style")
+        mbsDD:SetList(MASK_AND_BORDER_STYLE_ITEMS, { "1px", "Thin", "Medium", "Thick", "None" })
+        mbsDD:SetValue(barCfg.maskAndBorderStyle or "1px")
+        mbsDD:SetFullWidth(true)
+        mbsDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.maskAndBorderStyle = val
+            MB:RebuildAllBars()
+        end)
+        styleGroup:AddChild(mbsDD)
+    end
 
     local gapSlider = AceGUI:Create("Slider")
     gapSlider:SetLabel(L.mbSegmentGap)

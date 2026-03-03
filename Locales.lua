@@ -313,6 +313,12 @@ local S = {
     mbSmoothAnimation   = { "平滑动画",         "Smooth Animation" },
     mbSmoothAnimationTip = { "开启后，层数增加时条会平滑填充（仅对堆叠类生效）", "Enable smooth filling when stack count increases (Stacks only)" },
     mbLoadClass         = { "载入职业",         "Load Class" },
+    mbMaskAndBorderStyle= { "边框样式",         "Border Style" },
+    mbStyle1px          = { "1像素",            "1px" },
+    mbStyleThin         = { "细",               "Thin" },
+    mbStyleMedium       = { "适中",             "Medium" },
+    mbStyleThick        = { "粗",               "Thick" },
+    mbStyleNone         = { "无",               "None" },
 
     -- 增益自定义分组
     buffGroups          = { "buff分组",         "Buff Groups" },

@@ -24,6 +24,45 @@ local frameTick = 0
 -- 分段条波形填充速度：每秒填充的格数（每格约 83ms）
 local STACK_FILL_SPEED = 12
 
+function MB.rounded(num, idp)
+    if not num then return num end
+    local mult = 10^(idp or 0)
+    return math.floor(num * mult + 0.5) / mult
+end
+
+function MB.getPixelPerfectScale(customUIScale)
+    local screenHeight = select(2, GetPhysicalScreenSize())
+    local scale = customUIScale or UIParent:GetEffectiveScale()
+    if scale == 0 or screenHeight == 0 then return 1 end
+    return 768 / screenHeight / scale
+end
+
+function MB.getNearestPixel(value, customUIScale)
+    if value == 0 then return 0 end
+    local ppScale = MB.getPixelPerfectScale(customUIScale)
+    return MB.rounded(value / ppScale) * ppScale
+end
+
+MB.MASK_AND_BORDER_STYLES = {
+    ["1px"] = {
+        type = "fixed",
+        thickness = 1,
+    },
+    ["Thin"] = {
+        type = "fixed",
+        thickness = 2,
+    },
+    ["Medium"] = {
+        type = "fixed",
+        thickness = 3,
+    },
+    ["Thick"] = {
+        type = "fixed",
+        thickness = 5,
+    },
+    ["None"] = {},
+}
+
 -- 御龙术（Skyriding）检测
 -- 主判断：御龙术动作条占据 BonusBar slot 11 / offset 5
 -- 次判断：canGlide == true 说明玩家骑乘了御龙坐骑（不再要求 powerBar 非零，
@@ -159,27 +198,70 @@ end
 -- 段条 / 边框
 ------------------------------------------------------
 
-local function ApplyWholeBorder(barFrame, cfg)
-    local size = cfg.borderSize or 1
-    if size <= 0 then
-        if barFrame._mbBorder then barFrame._mbBorder:Hide() end
-        return
+function MB.ApplyMaskAndBorderSettings(barFrame, cfg)
+    local styleName = cfg.maskAndBorderStyle or "1px"
+    local style = MB.MASK_AND_BORDER_STYLES[styleName] or MB.MASK_AND_BORDER_STYLES["1px"]
+    
+    local width, height = barFrame:GetSize()
+    
+    if barFrame._mask then
+        barFrame._mask:SetTexture([[Interface\AddOns\CDFlow\Textures\Specials\white.png]])
+        barFrame._mask:SetAllPoints(barFrame)
     end
-    if not barFrame._mbBorder then
-        barFrame._mbBorder = CreateFrame("Frame", nil, barFrame, "BackdropTemplate")
+
+    if style.type == "fixed" then
+        if not barFrame._fixedBorders then
+            barFrame._fixedBorders = {}
+            barFrame._fixedBorders.top    = barFrame._borderFrame:CreateTexture(nil, "OVERLAY")
+            barFrame._fixedBorders.bottom = barFrame._borderFrame:CreateTexture(nil, "OVERLAY")
+            barFrame._fixedBorders.left   = barFrame._borderFrame:CreateTexture(nil, "OVERLAY")
+            barFrame._fixedBorders.right  = barFrame._borderFrame:CreateTexture(nil, "OVERLAY")
+        end
+
+        barFrame._border:Hide()
+        
+        local thickness = (style.thickness or 1) * (cfg.scale or 1)
+        local pThickness = MB.getNearestPixel(thickness)
+        local borderColor = cfg.borderColor or { 0, 0, 0, 1 }
+
+        for edge, t in pairs(barFrame._fixedBorders) do
+            t:ClearAllPoints()
+            if edge == "top" then
+                t:SetPoint("TOPLEFT", barFrame._borderFrame, "TOPLEFT")
+                t:SetPoint("TOPRIGHT", barFrame._borderFrame, "TOPRIGHT")
+                t:SetHeight(pThickness)
+            elseif edge == "bottom" then
+                t:SetPoint("BOTTOMLEFT", barFrame._borderFrame, "BOTTOMLEFT")
+                t:SetPoint("BOTTOMRIGHT", barFrame._borderFrame, "BOTTOMRIGHT")
+                t:SetHeight(pThickness)
+            elseif edge == "left" then
+                t:SetPoint("TOPLEFT", barFrame._borderFrame, "TOPLEFT")
+                t:SetPoint("BOTTOMLEFT", barFrame._borderFrame, "BOTTOMLEFT")
+                t:SetWidth(pThickness)
+            elseif edge == "right" then
+                t:SetPoint("TOPRIGHT", barFrame._borderFrame, "TOPRIGHT")
+                t:SetPoint("BOTTOMRIGHT", barFrame._borderFrame, "BOTTOMRIGHT")
+                t:SetWidth(pThickness)
+            end
+            t:SetColorTexture(borderColor[1] or 0, borderColor[2] or 0, borderColor[3] or 0, borderColor[4] or 1)
+            t:Show()
+        end
+    elseif style.type == "texture" then
+        barFrame._border:Show()
+        barFrame._border:SetTexture(style.border)
+        barFrame._border:SetAllPoints(barFrame._borderFrame)
+        local borderColor = cfg.borderColor or { 0, 0, 0, 1 }
+        barFrame._border:SetVertexColor(borderColor[1] or 0, borderColor[2] or 0, borderColor[3] or 0, borderColor[4] or 1)
+
+        if barFrame._fixedBorders then
+            for _, t in pairs(barFrame._fixedBorders) do t:Hide() end
+        end
+    else
+        barFrame._border:Hide()
+        if barFrame._fixedBorders then
+            for _, t in pairs(barFrame._fixedBorders) do t:Hide() end
+        end
     end
-    local border = barFrame._mbBorder
-    border:ClearAllPoints()
-    border:SetPoint("TOPLEFT", barFrame, "TOPLEFT", -size, size)
-    border:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", size, -size)
-    border:SetBackdrop({
-        edgeFile = "Interface\\BUTTONS\\WHITE8X8",
-        edgeSize = size,
-    })
-    local c = cfg.borderColor or { 0, 0, 0, 1 }
-    border:SetBackdropBorderColor(c[1], c[2], c[3], c[4])
-    border:SetFrameLevel(barFrame:GetFrameLevel() + 2)
-    border:Show()
 end
 
 -- 统一监控条层级基线，避免“BACKGROUND”仍因固定高 FrameLevel 覆盖其他 UI
@@ -227,6 +309,7 @@ local function CreateSegments(barFrame, count, cfg)
         bg:SetPoint("TOPLEFT", container, "TOPLEFT", xOff, 0)
         bg:SetSize(segW, totalH)
         bg:SetColorTexture(bgColor[1], bgColor[2], bgColor[3], bgColor[4])
+        if barFrame._mask then bg:AddMaskTexture(barFrame._mask) end
         bg:Show()
         barFrame._segBGs[i] = bg
 
@@ -239,6 +322,10 @@ local function CreateSegments(barFrame, count, cfg)
         bar:SetValue(0)
         bar:SetFrameLevel(container:GetFrameLevel() + 1)
         ConfigureStatusBar(bar)
+        
+        if barFrame._mask then
+            bar:GetStatusBarTexture():AddMaskTexture(barFrame._mask)
+        end
 
         if perSegBorder and borderSize > 0 then
             local border = CreateFrame("Frame", nil, container, "BackdropTemplate")
@@ -260,7 +347,7 @@ local function CreateSegments(barFrame, count, cfg)
     if perSegBorder then
         if barFrame._mbBorder then barFrame._mbBorder:Hide() end
     else
-        ApplyWholeBorder(barFrame, cfg)
+        MB.ApplyMaskAndBorderSettings(barFrame, cfg)
     end
 end
 
@@ -317,6 +404,21 @@ function MB:CreateBarFrame(barCfg)
     local bgc = barCfg.bgColor or { 0.1, 0.1, 0.1, 0.6 }
     f.bg:SetColorTexture(bgc[1], bgc[2], bgc[3], bgc[4])
 
+    -- Mask
+    f._mask = f:CreateMaskTexture()
+    f._mask:SetAllPoints()
+    f._mask:SetTexture([[Interface\AddOns\CDFlow\Textures\Specials\white.png]])
+    f.bg:AddMaskTexture(f._mask)
+
+    -- Border Frame
+    f._borderFrame = CreateFrame("Frame", nil, f)
+    f._borderFrame:SetAllPoints()
+    f._borderFrame:SetFrameLevel(f:GetFrameLevel() + 5)
+    f._border = f._borderFrame:CreateTexture(nil, "OVERLAY")
+    f._border:SetAllPoints()
+    f._border:SetBlendMode("BLEND")
+    f._border:Hide()
+
     local iconSize = barCfg.height
     f._icon = f:CreateTexture(nil, "ARTWORK")
     f._icon:SetSize(iconSize, iconSize)
@@ -332,7 +434,7 @@ function MB:CreateBarFrame(barCfg)
 
     f._textHolder = CreateFrame("Frame", nil, f)
     f._textHolder:SetAllPoints(f._segContainer)
-    f._textHolder:SetFrameLevel(f:GetFrameLevel() + 3)
+    f._textHolder:SetFrameLevel(f:GetFrameLevel() + 6)
 
     f._text = f._textHolder:CreateFontString(nil, "OVERLAY")
     local fontPath = ResolveFontPath(barCfg.fontName)
@@ -353,7 +455,7 @@ function MB:CreateBarFrame(barCfg)
     local function UpdatePosLabel(frame)
         if not frame._posLabel then return end
         local cfg = frame._cfg or barCfg
-        frame._posLabel:SetFormattedText("X: %.0f  Y: %.0f", cfg.posX or 0, cfg.posY or 0)
+        frame._posLabel:SetFormattedText("X: %.1f  Y: %.1f", cfg.posX or 0, cfg.posY or 0)
     end
 
     f:EnableMouse(true)
@@ -366,10 +468,10 @@ function MB:CreateBarFrame(barCfg)
             local cx, cy = s:GetCenter()
             local p = s:GetParent()
             if p and p == UIParent then
-                local posX = cx - p:GetWidth() * 0.5
-                local posY = cy - p:GetHeight() * 0.5
+                local posX = MB.rounded(cx - p:GetWidth() * 0.5, 1)
+                local posY = MB.rounded(cy - p:GetHeight() * 0.5, 1)
                 if s._posLabel then
-                    s._posLabel:SetFormattedText("X: %.0f  Y: %.0f", posX, posY)
+                    s._posLabel:SetFormattedText("X: %.1f  Y: %.1f", posX, posY)
                 end
             end
         end)
@@ -380,12 +482,12 @@ function MB:CreateBarFrame(barCfg)
         local cx, cy = self:GetCenter()
         local p = self:GetParent()
         if p and p == UIParent then
-            barCfg.posX = cx - p:GetWidth() * 0.5
-            barCfg.posY = cy - p:GetHeight() * 0.5
+            barCfg.posX = MB.rounded(cx - p:GetWidth() * 0.5, 1)
+            barCfg.posY = MB.rounded(cy - p:GetHeight() * 0.5, 1)
         else
             local _, _, _, x, y = self:GetPoint(1)
-            barCfg.posX = x or 0
-            barCfg.posY = y or 0
+            barCfg.posX = MB.rounded(x or 0, 1)
+            barCfg.posY = MB.rounded(y or 0, 1)
         end
         self:ClearAllPoints()
         self:SetPoint("CENTER", UIParent, "CENTER", barCfg.posX, barCfg.posY)
@@ -394,11 +496,11 @@ function MB:CreateBarFrame(barCfg)
 
     f:SetScript("OnMouseWheel", function(self, delta)
         if ns.db.monitorBars.locked then return end
-        local step = IsControlKeyDown() and 10 or 1
+        local step = IsControlKeyDown() and 1 or 0.1
         if IsShiftKeyDown() then
-            barCfg.posX = (barCfg.posX or 0) + delta * step
+            barCfg.posX = MB.rounded((barCfg.posX or 0) + delta * step, 1)
         else
-            barCfg.posY = (barCfg.posY or 0) + delta * step
+            barCfg.posY = MB.rounded((barCfg.posY or 0) + delta * step, 1)
         end
         self:ClearAllPoints()
         self:SetPoint("CENTER", UIParent, "CENTER", barCfg.posX, barCfg.posY)
@@ -448,11 +550,23 @@ function MB:CreateBarFrame(barCfg)
     return f
 end
 
+function MB:GetSize(barFrame)
+    local cfg = barFrame._cfg
+    if not cfg then return 200, 20 end
+    
+    local width = cfg.width
+    local scale = cfg.scale or 1
+    local height = cfg.height
+    
+    return MB.getNearestPixel(width, scale), MB.getNearestPixel(height, scale)
+end
+
 function MB:ApplyStyle(barFrame)
     local cfg = barFrame._cfg
     if not cfg then return end
 
-    barFrame:SetSize(cfg.width, cfg.height)
+    local width, height = self:GetSize(barFrame)
+    barFrame:SetSize(width, height)
 
     local strata = cfg.frameStrata or "MEDIUM"
     local baseLevel = GetBaseFrameLevelByStrata(strata)
@@ -460,9 +574,10 @@ function MB:ApplyStyle(barFrame)
     barFrame:SetFrameLevel(baseLevel)
     if barFrame._segContainer then barFrame._segContainer:SetFrameStrata(strata) end
     if barFrame._textHolder    then barFrame._textHolder:SetFrameStrata(strata) end
-    if barFrame._mbBorder      then barFrame._mbBorder:SetFrameStrata(strata) end
+    if barFrame._borderFrame   then barFrame._borderFrame:SetFrameStrata(strata) end
     if barFrame._segContainer then barFrame._segContainer:SetFrameLevel(baseLevel + 1) end
-    if barFrame._textHolder    then barFrame._textHolder:SetFrameLevel(baseLevel + 3) end
+    if barFrame._textHolder    then barFrame._textHolder:SetFrameLevel(baseLevel + 6) end
+    if barFrame._borderFrame   then barFrame._borderFrame:SetFrameLevel(baseLevel + 5) end
     if barFrame._segments then
         for _, seg in ipairs(barFrame._segments) do
             seg:SetFrameStrata(strata)
@@ -479,7 +594,7 @@ function MB:ApplyStyle(barFrame)
     local bgc = cfg.bgColor or { 0.1, 0.1, 0.1, 0.6 }
     barFrame.bg:SetColorTexture(bgc[1], bgc[2], bgc[3], bgc[4])
 
-    local iconSize = cfg.height
+    local iconSize = height
     barFrame._icon:SetSize(iconSize, iconSize)
     local showIcon = cfg.showIcon ~= false
     barFrame._icon:SetShown(showIcon)
@@ -507,9 +622,9 @@ function MB:ApplyStyle(barFrame)
     barFrame._text:SetJustifyH(AnchorToJustifyH(anchor))
 
     if cfg.borderStyle ~= "segment" then
-        ApplyWholeBorder(barFrame, cfg)
-    elseif barFrame._mbBorder then
-        barFrame._mbBorder:Hide()
+        MB.ApplyMaskAndBorderSettings(barFrame, cfg)
+    elseif barFrame._borderFrame then
+        barFrame._borderFrame:Hide()
     end
 
     if cfg.spellID and cfg.spellID > 0 then
@@ -1184,7 +1299,7 @@ function MB:SetLocked(locked)
             else
                 local cfg = f._cfg
                 if cfg then
-                    f._posLabel:SetFormattedText("X: %.0f  Y: %.0f", cfg.posX or 0, cfg.posY or 0)
+                    f._posLabel:SetFormattedText("X: %.1f  Y: %.1f", cfg.posX or 0, cfg.posY or 0)
                 end
                 f._posLabel:Show()
             end
