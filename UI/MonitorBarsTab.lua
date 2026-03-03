@@ -47,8 +47,9 @@ local TEXT_ANCHOR_ITEMS = {
 local TEXT_ANCHOR_ORDER = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
 
 local BAR_TYPE_ITEMS = {
-    ["stack"]  = L.mbTypeStack,
-    ["charge"] = L.mbTypeCharge,
+    ["stack"]    = L.mbTypeStack,
+    ["charge"]   = L.mbTypeCharge,
+    ["duration"] = L.mbTypeDuration,
 }
 
 local UNIT_ITEMS = {
@@ -111,6 +112,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         unit       = unit or "player",
         maxStacks  = 5,
         maxCharges = 0,
+        maxDuration = 60,
         width      = 200,
         height     = 20,
         posX       = 0,
@@ -135,7 +137,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         borderStyle     = "whole",
         segmentGap      = 1,
         hideFromCDM     = false,
-        showCondition   = "always",
+        showCondition   = (barType == "duration") and "active_only" or "always",
         frameStrata     = "MEDIUM",
         textAnchor      = "RIGHT",
         smoothAnimation = true,
@@ -161,7 +163,14 @@ local function GetBarDropdownList(cfg)
     for i, bar in ipairs(cfg.bars) do
         if IsClassMatchedForCurrentPlayer(bar.class) then
             local name = bar.spellName and bar.spellName ~= "" and bar.spellName or L.mbNoSpell
-            local typeTag = bar.barType == "charge" and L.mbTypeCharge or L.mbTypeStack
+            local typeTag
+            if bar.barType == "charge" then
+                typeTag = L.mbTypeCharge
+            elseif bar.barType == "duration" then
+                typeTag = L.mbTypeDuration or "Duration"
+            else
+                typeTag = L.mbTypeStack
+            end
             items[i] = string.format("%s  [%s]", name, typeTag)
             order[#order + 1] = i
         end
@@ -203,7 +212,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
 
     local typeDD = AceGUI:Create("Dropdown")
     typeDD:SetLabel(L.mbBarType)
-    typeDD:SetList(BAR_TYPE_ITEMS, { "stack", "charge" })
+    typeDD:SetList(BAR_TYPE_ITEMS, { "stack", "charge", "duration" })
     typeDD:SetValue(barCfg.barType)
     typeDD:SetFullWidth(true)
     typeDD:SetCallback("OnValueChanged", function(_, _, val)
@@ -270,6 +279,23 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             Refresh()
         end)
         container:AddChild(unitDD)
+    elseif barCfg.barType == "duration" then
+        local cdmHint = AceGUI:Create("Label")
+        cdmHint:SetText("|cffffcc00" .. L.mbCDMHint .. "|r")
+        cdmHint:SetFullWidth(true)
+        cdmHint:SetFontObject(GameFontHighlightSmall)
+        container:AddChild(cdmHint)
+
+        local unitDD = AceGUI:Create("Dropdown")
+        unitDD:SetLabel(L.mbUnit)
+        unitDD:SetList(UNIT_ITEMS, { "player", "target" })
+        unitDD:SetValue(barCfg.unit or "player")
+        unitDD:SetFullWidth(true)
+        unitDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.unit = val
+            Refresh()
+        end)
+        container:AddChild(unitDD)
     end
 
     local hideCDMCB = AceGUI:Create("CheckBox")
@@ -289,10 +315,11 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         ["target"]          = L.mbCondTarget,
         ["dragonriding"]    = L.mbCondDragonriding,
         ["not_dragonriding"] = L.mbCondNotDragonriding,
+        ["active_only"]     = L.mbCondActiveOnly,
     }
     local condDD = AceGUI:Create("Dropdown")
     condDD:SetLabel(L.mbShowCondition)
-    condDD:SetList(SHOW_COND_ITEMS, { "always", "combat", "target", "dragonriding", "not_dragonriding" })
+    condDD:SetList(SHOW_COND_ITEMS, { "always", "combat", "target", "dragonriding", "not_dragonriding", "active_only" })
     condDD:SetValue(barCfg.showCondition or "always")
     condDD:SetFullWidth(true)
     condDD:SetCallback("OnValueChanged", function(_, _, val)
@@ -312,7 +339,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             MB:RebuildAllBars()
         end)
         container:AddChild(maxSlider)
-        
+
         local smoothCB = AceGUI:Create("CheckBox")
         smoothCB:SetLabel(L.mbSmoothAnimation)
         smoothCB:SetValue(barCfg.smoothAnimation ~= false)
@@ -330,7 +357,7 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
             GameTooltip:Hide()
         end)
         container:AddChild(smoothCB)
-    else
+    elseif barCfg.barType == "charge" then
         local chargeSlider = AceGUI:Create("Slider")
         chargeSlider:SetLabel(L.mbMaxCharges)
         chargeSlider:SetSliderValues(0, 10, 1)
@@ -453,80 +480,90 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     barColorPicker:SetCallback("OnValueConfirmed", OnBarColor)
     styleGroup:AddChild(barColorPicker)
 
-    -- 声明第二段阈值控件的引用，以便在第一段阈值变化时更新它们的状态
-    local thresholdSlider2, thresholdColorPicker2
+    -- 阈值染色（持续时间条不支持）
+    if barCfg.barType ~= "duration" then
+        -- 声明第二段阈值控件的引用，以便在第一段阈值变化时更新它们的状态
+        local thresholdSlider2, thresholdColorPicker2
 
-    local maxVal = barCfg.barType == "charge" and (barCfg.maxCharges > 0 and barCfg.maxCharges or 10) or (barCfg.maxStacks or 30)
-    local thresholdSlider = AceGUI:Create("Slider")
-    thresholdSlider:SetLabel(L.mbColorThreshold)
-    thresholdSlider:SetSliderValues(0, maxVal, 1)
-    thresholdSlider:SetValue(barCfg.colorThreshold or 0)
-    thresholdSlider:SetFullWidth(true)
-    thresholdSlider:SetCallback("OnValueChanged", function(_, _, val)
-        local newVal = math.floor(val)
-        barCfg.colorThreshold = newVal
-        MB:RebuildAllBars()
-        -- 根据第一段阈值启用/禁用第二段阈值控件
-        if thresholdSlider2 then
-            thresholdSlider2:SetDisabled(newVal == 0)
+        local maxVal
+        if barCfg.barType == "charge" then
+            maxVal = (barCfg.maxCharges > 0 and barCfg.maxCharges or 10)
+        elseif barCfg.barType == "duration" then
+            maxVal = (barCfg.maxDuration or 60)
+        else
+            maxVal = (barCfg.maxStacks or 30)
         end
-        if thresholdColorPicker2 then
-            thresholdColorPicker2:SetDisabled(newVal == 0)
+        local thresholdSlider = AceGUI:Create("Slider")
+        thresholdSlider:SetLabel(L.mbColorThreshold)
+        thresholdSlider:SetSliderValues(0, maxVal, barCfg.barType == "duration" and 0.1 or 1)
+        thresholdSlider:SetValue(barCfg.colorThreshold or 0)
+        thresholdSlider:SetFullWidth(true)
+        thresholdSlider:SetCallback("OnValueChanged", function(_, _, val)
+            local newVal = barCfg.barType == "duration" and (math.floor(val * 10 + 0.5) / 10) or math.floor(val)
+            barCfg.colorThreshold = newVal
+            MB:RebuildAllBars()
+            -- 根据第一段阈值启用/禁用第二段阈值控件
+            if thresholdSlider2 then
+                thresholdSlider2:SetDisabled(newVal == 0)
+            end
+            if thresholdColorPicker2 then
+                thresholdColorPicker2:SetDisabled(newVal == 0)
+            end
+        end)
+        styleGroup:AddChild(thresholdSlider)
+
+        local thresholdTip = AceGUI:Create("Label")
+        thresholdTip:SetText("|cffaaaaaa" .. L.mbColorThresholdTip .. "|r")
+        thresholdTip:SetFullWidth(true)
+        thresholdTip:SetFontObject(GameFontHighlightSmall)
+        styleGroup:AddChild(thresholdTip)
+
+        local thresholdColorPicker = AceGUI:Create("ColorPicker")
+        thresholdColorPicker:SetLabel(L.mbThresholdColor)
+        thresholdColorPicker:SetHasAlpha(true)
+        local tc = barCfg.thresholdColor or { 1.0, 0.5, 0.0, 1 }
+        thresholdColorPicker:SetColor(tc[1], tc[2], tc[3], tc[4])
+        local function OnThresholdColor(_, _, r, g, b, a)
+            barCfg.thresholdColor = { r, g, b, a }
+            MB:RebuildAllBars()
         end
-    end)
-    styleGroup:AddChild(thresholdSlider)
+        thresholdColorPicker:SetCallback("OnValueChanged", OnThresholdColor)
+        thresholdColorPicker:SetCallback("OnValueConfirmed", OnThresholdColor)
+        styleGroup:AddChild(thresholdColorPicker)
 
-    local thresholdTip = AceGUI:Create("Label")
-    thresholdTip:SetText("|cffaaaaaa" .. L.mbColorThresholdTip .. "|r")
-    thresholdTip:SetFullWidth(true)
-    thresholdTip:SetFontObject(GameFontHighlightSmall)
-    styleGroup:AddChild(thresholdTip)
+        -- 第二段阈值（始终显示，但在第一段阈值为 0 时禁用）
+        thresholdSlider2 = AceGUI:Create("Slider")
+        thresholdSlider2:SetLabel(L.mbColorThreshold2)
+        thresholdSlider2:SetSliderValues(0, maxVal, barCfg.barType == "duration" and 0.1 or 1)
+        thresholdSlider2:SetValue(barCfg.colorThreshold2 or 0)
+        thresholdSlider2:SetFullWidth(true)
+        thresholdSlider2:SetDisabled((barCfg.colorThreshold or 0) == 0)
+        thresholdSlider2:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.colorThreshold2 = barCfg.barType == "duration" and (math.floor(val * 10 + 0.5) / 10) or math.floor(val)
+            MB:RebuildAllBars()
+        end)
+        styleGroup:AddChild(thresholdSlider2)
 
-    local thresholdColorPicker = AceGUI:Create("ColorPicker")
-    thresholdColorPicker:SetLabel(L.mbThresholdColor)
-    thresholdColorPicker:SetHasAlpha(true)
-    local tc = barCfg.thresholdColor or { 1.0, 0.5, 0.0, 1 }
-    thresholdColorPicker:SetColor(tc[1], tc[2], tc[3], tc[4])
-    local function OnThresholdColor(_, _, r, g, b, a)
-        barCfg.thresholdColor = { r, g, b, a }
-        MB:RebuildAllBars()
+        local thresholdTip2 = AceGUI:Create("Label")
+        thresholdTip2:SetText("|cffaaaaaa" .. L.mbColorThresholdTip2 .. "|r")
+        thresholdTip2:SetFullWidth(true)
+        thresholdTip2:SetFontObject(GameFontHighlightSmall)
+        styleGroup:AddChild(thresholdTip2)
+
+        thresholdColorPicker2 = AceGUI:Create("ColorPicker")
+        thresholdColorPicker2:SetLabel(L.mbThresholdColor2)
+        thresholdColorPicker2:SetHasAlpha(true)
+        local tc2 = barCfg.thresholdColor2 or { 1.0, 0.0, 0.0, 1 }
+        thresholdColorPicker2:SetColor(tc2[1], tc2[2], tc2[3], tc2[4])
+        thresholdColorPicker2:SetDisabled((barCfg.colorThreshold or 0) == 0)
+        local function OnThresholdColor2(_, _, r, g, b, a)
+            barCfg.thresholdColor2 = { r, g, b, a }
+            MB:RebuildAllBars()
+        end
+        thresholdColorPicker2:SetCallback("OnValueChanged", OnThresholdColor2)
+        thresholdColorPicker2:SetCallback("OnValueConfirmed", OnThresholdColor2)
+        styleGroup:AddChild(thresholdColorPicker2)
     end
-    thresholdColorPicker:SetCallback("OnValueChanged", OnThresholdColor)
-    thresholdColorPicker:SetCallback("OnValueConfirmed", OnThresholdColor)
-    styleGroup:AddChild(thresholdColorPicker)
-
-    -- 第二段阈值（始终显示，但在第一段阈值为 0 时禁用）
-    thresholdSlider2 = AceGUI:Create("Slider")
-    thresholdSlider2:SetLabel(L.mbColorThreshold2)
-    thresholdSlider2:SetSliderValues(0, maxVal, 1)
-    thresholdSlider2:SetValue(barCfg.colorThreshold2 or 0)
-    thresholdSlider2:SetFullWidth(true)
-    thresholdSlider2:SetDisabled((barCfg.colorThreshold or 0) == 0)
-    thresholdSlider2:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.colorThreshold2 = math.floor(val)
-        MB:RebuildAllBars()
-    end)
-    styleGroup:AddChild(thresholdSlider2)
-
-    local thresholdTip2 = AceGUI:Create("Label")
-    thresholdTip2:SetText("|cffaaaaaa" .. L.mbColorThresholdTip2 .. "|r")
-    thresholdTip2:SetFullWidth(true)
-    thresholdTip2:SetFontObject(GameFontHighlightSmall)
-    styleGroup:AddChild(thresholdTip2)
-
-    thresholdColorPicker2 = AceGUI:Create("ColorPicker")
-    thresholdColorPicker2:SetLabel(L.mbThresholdColor2)
-    thresholdColorPicker2:SetHasAlpha(true)
-    local tc2 = barCfg.thresholdColor2 or { 1.0, 0.0, 0.0, 1 }
-    thresholdColorPicker2:SetColor(tc2[1], tc2[2], tc2[3], tc2[4])
-    thresholdColorPicker2:SetDisabled((barCfg.colorThreshold or 0) == 0)
-    local function OnThresholdColor2(_, _, r, g, b, a)
-        barCfg.thresholdColor2 = { r, g, b, a }
-        MB:RebuildAllBars()
-    end
-    thresholdColorPicker2:SetCallback("OnValueChanged", OnThresholdColor2)
-    thresholdColorPicker2:SetCallback("OnValueConfirmed", OnThresholdColor2)
-    styleGroup:AddChild(thresholdColorPicker2)
 
     local bgColorPicker = AceGUI:Create("ColorPicker")
     bgColorPicker:SetLabel(L.mbBgColor)
@@ -554,41 +591,47 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     borderColorPicker:SetCallback("OnValueConfirmed", OnBorderColor)
     styleGroup:AddChild(borderColorPicker)
 
-    local borderStyleDD = AceGUI:Create("Dropdown")
-    borderStyleDD:SetLabel(L.mbBorderStyle)
-    borderStyleDD:SetList(BORDER_STYLE_ITEMS, { "whole", "segment" })
-    borderStyleDD:SetValue(barCfg.borderStyle or "whole")
-    borderStyleDD:SetFullWidth(true)
-    borderStyleDD:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.borderStyle = val
-        MB:RebuildAllBars()
-        rebuildAll()
-    end)
-    styleGroup:AddChild(borderStyleDD)
-
-    if (barCfg.borderStyle or "whole") == "whole" then
-        local mbsDD = AceGUI:Create("Dropdown")
-        mbsDD:SetLabel(L.mbMaskAndBorderStyle or "Border Style")
-        mbsDD:SetList(MASK_AND_BORDER_STYLE_ITEMS, { "1px", "Thin", "Medium", "Thick", "None" })
-        mbsDD:SetValue(barCfg.maskAndBorderStyle or "1px")
-        mbsDD:SetFullWidth(true)
-        mbsDD:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.maskAndBorderStyle = val
+    -- 边框样式（持续时间条不支持分段边框）
+    if barCfg.barType ~= "duration" then
+        local borderStyleDD = AceGUI:Create("Dropdown")
+        borderStyleDD:SetLabel(L.mbBorderStyle)
+        borderStyleDD:SetList(BORDER_STYLE_ITEMS, { "whole", "segment" })
+        borderStyleDD:SetValue(barCfg.borderStyle or "whole")
+        borderStyleDD:SetFullWidth(true)
+        borderStyleDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.borderStyle = val
             MB:RebuildAllBars()
+            rebuildAll()
         end)
-        styleGroup:AddChild(mbsDD)
+        styleGroup:AddChild(borderStyleDD)
+
+        if (barCfg.borderStyle or "whole") == "whole" then
+            local mbsDD = AceGUI:Create("Dropdown")
+            mbsDD:SetLabel(L.mbMaskAndBorderStyle or "Border Style")
+            mbsDD:SetList(MASK_AND_BORDER_STYLE_ITEMS, { "1px", "Thin", "Medium", "Thick", "None" })
+            mbsDD:SetValue(barCfg.maskAndBorderStyle or "1px")
+            mbsDD:SetFullWidth(true)
+            mbsDD:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.maskAndBorderStyle = val
+                MB:RebuildAllBars()
+            end)
+            styleGroup:AddChild(mbsDD)
+        end
     end
 
-    local gapSlider = AceGUI:Create("Slider")
-    gapSlider:SetLabel(L.mbSegmentGap)
-    gapSlider:SetSliderValues(0, 10, 1)
-    gapSlider:SetValue(barCfg.segmentGap ~= nil and barCfg.segmentGap or 1)
-    gapSlider:SetFullWidth(true)
-    gapSlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.segmentGap = math.floor(val)
-        MB:RebuildAllBars()
-    end)
-    styleGroup:AddChild(gapSlider)
+    -- 分段间距（持续时间条不支持）
+    if barCfg.barType ~= "duration" then
+        local gapSlider = AceGUI:Create("Slider")
+        gapSlider:SetLabel(L.mbSegmentGap)
+        gapSlider:SetSliderValues(0, 10, 1)
+        gapSlider:SetValue(barCfg.segmentGap ~= nil and barCfg.segmentGap or 1)
+        gapSlider:SetFullWidth(true)
+        gapSlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.segmentGap = math.floor(val)
+            MB:RebuildAllBars()
+        end)
+        styleGroup:AddChild(gapSlider)
+    end
 
     local iconCB = AceGUI:Create("CheckBox")
     iconCB:SetLabel(L.mbShowIcon)
@@ -601,7 +644,14 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     styleGroup:AddChild(iconCB)
 
     local textCB = AceGUI:Create("CheckBox")
-    local showTextLabel = barCfg.barType == "charge" and L.mbShowTextCharge or L.mbShowTextStack
+    local showTextLabel
+    if barCfg.barType == "charge" then
+        showTextLabel = L.mbShowTextCharge
+    elseif barCfg.barType == "duration" then
+        showTextLabel = L.mbShowTextDuration or "Show Duration Text"
+    else
+        showTextLabel = L.mbShowTextStack
+    end
     textCB:SetLabel(showTextLabel)
     textCB:SetValue(barCfg.showText ~= false)
     textCB:SetFullWidth(true)
@@ -763,6 +813,7 @@ local function ShowCatalog(rebuildTab)
                 heading  = L.mbCatalogAuras,
                 entries  = auras,
                 onSelect = function(entry)
+                    -- 默认创建 stack 类型，用户可以在设置中改为 duration
                     AddBar(entry.spellID, entry.name, "stack", entry.unit)
                 end,
             },

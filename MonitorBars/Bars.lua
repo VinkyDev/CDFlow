@@ -21,6 +21,9 @@ local elapsed = 0
 local inCombat = false
 local frameTick = 0
 
+-- 前向声明，定义在生命周期区块，此处供 UpdateDurationBar 使用
+local ShouldBarBeVisible
+
 -- 分段条波形填充速度：每秒填充的格数（每格约 83ms）
 local STACK_FILL_SPEED = 12
 
@@ -662,7 +665,14 @@ function MB:ApplyStyle(barFrame)
     barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", segOffset, 0)
     barFrame._segContainer:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", 0, 0)
 
-    local count = (cfg.barType == "charge") and (cfg.maxCharges > 0 and cfg.maxCharges or barFrame._cachedMaxCharges) or cfg.maxStacks
+    local count
+    if cfg.barType == "charge" then
+        count = (cfg.maxCharges > 0 and cfg.maxCharges or barFrame._cachedMaxCharges)
+    elseif cfg.barType == "duration" then
+        count = 1  -- duration 类型只需要一个分段
+    else
+        count = cfg.maxStacks
+    end
     if count > 0 then
         C_Timer.After(0, function()
             if barFrame._segContainer then
@@ -1062,6 +1072,133 @@ local function UpdateChargeBar(barFrame)
     end
 end
 
+local function UpdateDurationBar(barFrame)
+    local cfg = barFrame._cfg
+    if not cfg or cfg.barType ~= "duration" then return end
+
+    local spellID = cfg.spellID
+    if not spellID or spellID <= 0 then return end
+
+    local auraActive = false
+    local cooldownID = spellToCooldownID[spellID]
+    barFrame._cooldownID = cooldownID
+
+    local cdmFrame = nil
+    local auraInstanceID = nil
+    local unit = nil
+
+    if cooldownID then
+        cdmFrame = FindCDMFrame(cooldownID)
+        if cdmFrame then
+            HookCDMFrame(cdmFrame, barFrame._barID)
+            barFrame._cdmFrame = cdmFrame
+
+            if HasAuraInstanceID(cdmFrame.auraInstanceID) then
+                auraActive = true
+                auraInstanceID = cdmFrame.auraInstanceID
+                unit = cdmFrame.auraDataUnit or cfg.unit or "player"
+                barFrame._trackedAuraInstanceID = auraInstanceID
+                barFrame._trackedUnit = unit
+            end
+        end
+    end
+
+    if not auraActive and HasAuraInstanceID(barFrame._trackedAuraInstanceID) then
+        local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID("player", barFrame._trackedAuraInstanceID)
+        if not auraData then
+            auraData = C_UnitAuras.GetAuraDataByAuraInstanceID("target", barFrame._trackedAuraInstanceID)
+            if auraData then
+                unit = "target"
+            end
+        else
+            unit = "player"
+        end
+        if auraData then
+            auraActive = true
+            auraInstanceID = barFrame._trackedAuraInstanceID
+            barFrame._trackedUnit = unit
+        end
+    end
+
+    -- 创建单个分段条
+    local segs = barFrame._segments
+    if not segs or #segs ~= 1 then
+        CreateSegments(barFrame, 1, cfg)
+        segs = barFrame._segments
+    end
+    if not segs or #segs < 1 then return end
+
+    local seg = segs[1]
+
+    if auraActive and auraInstanceID and unit then
+        -- 使用 C_UnitAuras.GetAuraDuration 获取 DurationObject
+        local timerOK = pcall(function()
+            local durObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
+            if durObj then
+                -- 使用 SetTimerDuration 让 StatusBar 自动处理 secret values
+                seg:SetMinMaxValues(0, 1)
+                local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
+                local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.RemainingTime or 0
+
+                if seg.SetTimerDuration then
+                    seg:SetTimerDuration(durObj, interpolation, direction)
+                    if seg.SetToTargetValue then
+                        seg:SetToTargetValue()
+                    end
+                end
+
+                -- 应用颜色（基于剩余时间的阈值）
+                -- 注意：这里不能直接读取剩余时间来比较，需要使用其他方法
+                -- 暂时使用默认颜色
+                local c = cfg.barColor or { 0.2, 0.8, 0.2, 1 }
+                seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
+
+                -- 更新文本显示
+                if cfg.showText ~= false and barFrame._text then
+                    local remaining = durObj:GetRemainingDuration()
+                    -- 格式化为 1 位小数
+                    local ok, remainingNum = pcall(tonumber, remaining)
+                    if ok and remainingNum then
+                        barFrame._text:SetText(string.format("%.1f", remainingNum))
+                    else
+                        barFrame._text:SetText(remaining)
+                    end
+                end
+            end
+        end)
+
+        if not timerOK then
+            -- 无法使用 SetTimerDuration，显示为满
+            seg:SetMinMaxValues(0, 1)
+            seg:SetValue(1)
+
+            if cfg.showText ~= false and barFrame._text then
+                barFrame._text:SetText("")
+            end
+        end
+    else
+        -- Aura 不活跃
+        barFrame._trackedAuraInstanceID = nil
+        barFrame._trackedUnit = nil
+
+        seg:SetMinMaxValues(0, 1)
+        seg:SetValue(0)
+
+        if cfg.showText ~= false and barFrame._text then
+            barFrame._text:SetText("")
+        end
+    end
+
+    -- 存储 aura 活跃状态，供 ShouldBarBeVisible 使用
+    local wasActive = barFrame._isActive
+    barFrame._isActive = auraActive
+
+    -- 如果 aura 活跃状态发生变化，且显示条件为 "active_only"，立即更新可见性
+    if wasActive ~= auraActive and cfg.showCondition == "active_only" then
+        barFrame:SetShown(ShouldBarBeVisible(cfg, barFrame))
+    end
+end
+
 ------------------------------------------------------
 -- OnUpdate 循环
 ------------------------------------------------------
@@ -1077,6 +1214,8 @@ local function UpdateAllBars()
                 UpdateStackBar(f)
             elseif barCfg.barType == "charge" then
                 UpdateChargeBar(f)
+            elseif barCfg.barType == "duration" then
+                UpdateDurationBar(f)
             end
         end
     end
@@ -1138,7 +1277,7 @@ local function IsClassMatchedForCurrentPlayer(classTag)
     return classTag == PLAYER_CLASS_TAG
 end
 
-local function ShouldBarBeVisible(barCfg)
+ShouldBarBeVisible = function(barCfg, barFrame)
     if not IsClassMatchedForCurrentPlayer(barCfg.class) then
         return false
     end
@@ -1147,6 +1286,7 @@ local function ShouldBarBeVisible(barCfg)
     if cond == "target"          then return hasTarget end
     if cond == "dragonriding"    then return isDragonriding end
     if cond == "not_dragonriding" then return not isDragonriding end
+    if cond == "active_only"     then return barFrame and barFrame._isActive end
     return true
 end
 
@@ -1232,16 +1372,21 @@ function MB:InitAllBars()
             local f = self:CreateBarFrame(barCfg)
             self:ApplyStyle(f)
 
-            local count = (barCfg.barType == "charge")
-                and (barCfg.maxCharges > 0 and barCfg.maxCharges or 1)
-                or barCfg.maxStacks
+            local count
+            if barCfg.barType == "charge" then
+                count = (barCfg.maxCharges > 0 and barCfg.maxCharges or 1)
+            elseif barCfg.barType == "duration" then
+                count = 1
+            else
+                count = barCfg.maxStacks
+            end
             C_Timer.After(0, function()
                 if f._segContainer and f._segContainer:GetWidth() > 0 then
                     CreateSegments(f, count, barCfg)
                 end
             end)
 
-            if ShouldBarBeVisible(barCfg) then
+            if ShouldBarBeVisible(barCfg, f) then
                 f:Show()
             else
                 f:Hide()
@@ -1279,7 +1424,7 @@ end
 local function RefreshBarVisibility()
     for _, f in pairs(activeFrames) do
         if f._cfg then
-            f:SetShown(ShouldBarBeVisible(f._cfg))
+            f:SetShown(ShouldBarBeVisible(f._cfg, f))
         end
     end
 end
@@ -1350,7 +1495,7 @@ function MB:OnTargetChanged()
             if f._cfg.unit == "target" then
                 f._trackedAuraInstanceID = nil
             end
-            f:SetShown(ShouldBarBeVisible(f._cfg))
+            f:SetShown(ShouldBarBeVisible(f._cfg, f))
         end
     end
 end
