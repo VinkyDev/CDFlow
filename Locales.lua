@@ -350,7 +350,7 @@ local S = {
     bgCDMHint           = { "提示：分组内 Buff 必须在冷却管理器中追踪才能显示；编辑模式下可预览分组位置",
                             "Note: Buffs in groups must be tracked in the Cooldown Manager; use Edit Mode to preview group positions" },
     -- 编辑模式锁定提示
-    buffEditModeLocked  = { "Buff 组编辑模式已锁定 - 使用 /cdf 配置", "Edit Mode locked - use /cdf" },
+    buffEditModeLocked  = { "Buff 组已锁定 - /cdf 打开配置在buff中进行配置位置偏移", "Edit Mode locked - use /cdf" },
     cdmCombatLocked     = { "|cffff4444[CDFlow]|r 战斗中无法打开冷却管理器设置",
                             "|cffff4444[CDFlow]|r Cannot open CDM Settings during combat" },
     cdmEditModeLocked   = { "|cffff4444[CDFlow]|r 编辑模式下无法打开冷却管理器设置",
