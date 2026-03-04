@@ -7,6 +7,7 @@ local DEFAULT_FONT = ns._mbConst.DEFAULT_FONT
 local BAR_TEXTURE  = ns._mbConst.BAR_TEXTURE
 local SEGMENT_GAP  = ns._mbConst.SEGMENT_GAP
 local UPDATE_INTERVAL = ns._mbConst.UPDATE_INTERVAL
+local RING_TEXTURE_FMT = "Interface\\AddOns\\CDFlow\\Textures\\Ring\\Ring_%dpx.tga"
 
 local ResolveFontPath    = MB.ResolveFontPath
 local ConfigureStatusBar = MB.ConfigureStatusBar
@@ -91,8 +92,12 @@ local function OnCDMFrameChanged(frame)
     if not ids then return end
     for _, id in ipairs(ids) do
         local f = activeFrames[id]
-        if f and f._cfg and f._cfg.barType == "stack" then
-            UpdateStackBar(f)
+        if f and f._cfg then
+            if f._cfg.barType == "stack" then
+                UpdateStackBar(f)
+            elseif f._cfg.barType == "duration" then
+                f._needsDurationRefresh = true
+            end
         end
     end
 end
@@ -302,6 +307,43 @@ local function CreateSegments(barFrame, count, cfg)
     local texPath = BAR_TEXTURE
     if LSM and LSM.Fetch and cfg.barTexture then
         texPath = LSM:Fetch("statusbar", cfg.barTexture) or BAR_TEXTURE
+    end
+
+    -- 如果是圆环模式，使用 CooldownFrame 实现
+    if cfg.barShape == "Ring" and cfg.barType == "duration" then
+        local thickness = cfg.ringThickness or 20
+        local ringTex = string.format(RING_TEXTURE_FMT, thickness)
+
+        local bg = container:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetTexture(ringTex)
+        bg:SetVertexColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4])
+        bg:Show()
+        barFrame._segBGs[1] = bg
+
+        -- 使用 CooldownFrame 作为进度显示
+        -- 技巧：将 SwipeTexture 设置为圆环纹理，并染色为 barColor
+        -- CooldownFrame 默认显示“冷却中”的黑色阴影，但我们可以通过 SetSwipeColor 改变它
+        -- 并且利用冷却倒计时（从满到空）来模拟 buff 剩余时间（从满到空）
+        local cd = CreateFrame("Cooldown", nil, container, "CooldownFrameTemplate")
+        cd:SetAllPoints()
+        cd:SetDrawEdge(false)
+        cd:SetDrawBling(false)
+        cd:SetSwipeTexture(ringTex)
+        cd:SetSwipeColor(barColor[1], barColor[2], barColor[3], barColor[4])
+        cd:SetHideCountdownNumbers(true)
+        cd:SetUseCircularEdge(false) -- 关闭圆形边缘裁剪，确保纹理完整显示
+        cd:Show()
+        
+        -- 标记这是一个 Ring Segment，方便后续识别
+        cd._isRing = true
+        barFrame._segments[1] = cd
+        
+        -- 圆环模式下不需要 Border (由纹理决定) 或 Mask (纹理自带透明)
+        if barFrame._mbBorder then barFrame._mbBorder:Hide() end
+        if barFrame._borderFrame then barFrame._borderFrame:Hide() end
+        
+        return
     end
 
     for i = 1, count do
@@ -619,6 +661,10 @@ function MB:GetSize(barFrame)
     local scale = cfg.scale or 1
     local height = cfg.height
     
+    if cfg.barShape == "Ring" and cfg.barType == "duration" then
+        height = width
+    end
+    
     return MB.getNearestPixel(width, scale), MB.getNearestPixel(height, scale)
 end
 
@@ -626,6 +672,7 @@ function MB:ApplyStyle(barFrame)
     local cfg = barFrame._cfg
     if not cfg then return end
 
+    local isRing = (cfg.barShape == "Ring" and cfg.barType == "duration")
     local width, height = self:GetSize(barFrame)
     barFrame:SetSize(width, height)
 
@@ -656,14 +703,65 @@ function MB:ApplyStyle(barFrame)
     barFrame.bg:SetColorTexture(bgc[1], bgc[2], bgc[3], bgc[4])
 
     local iconSize = height
+    if isRing then iconSize = height * 0.7 end
     barFrame._icon:SetSize(iconSize, iconSize)
+    
     local showIcon = cfg.showIcon ~= false
+    if isRing then showIcon = false end
     barFrame._icon:SetShown(showIcon)
 
-    local segOffset = showIcon and (iconSize + 2) or 0
-    barFrame._segContainer:ClearAllPoints()
-    barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", segOffset, 0)
-    barFrame._segContainer:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", 0, 0)
+    -- Icon Mask for Ring
+    if isRing and showIcon then
+        if not barFrame._iconMask then
+             barFrame._iconMask = barFrame:CreateMaskTexture()
+             barFrame._iconMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask")
+             barFrame._iconMask:SetAllPoints(barFrame._icon)
+             barFrame._icon:AddMaskTexture(barFrame._iconMask)
+        end
+        barFrame._iconMask:Show()
+    else
+        if barFrame._iconMask then barFrame._iconMask:Hide() end
+    end
+
+    -- Spell Name for Ring
+    if isRing and cfg.showSpellName then
+        if not barFrame._nameText then
+            barFrame._nameText = barFrame._textHolder:CreateFontString(nil, "OVERLAY")
+        end
+        local fontPath = ResolveFontPath(cfg.fontName)
+        barFrame._nameText:SetFont(fontPath, cfg.nameFontSize or 12, cfg.outline or "OUTLINE")
+        
+        local nAnchor = cfg.nameAnchor or "CENTER"
+        local nX = cfg.nameOffsetX or 0
+        local nY = cfg.nameOffsetY or 0
+        
+        barFrame._nameText:ClearAllPoints()
+        barFrame._nameText:SetPoint(ANCHOR_POINT[nAnchor] or nAnchor, barFrame, ANCHOR_REL[nAnchor] or nAnchor, nX, nY)
+        barFrame._nameText:SetText(cfg.spellName or "")
+        barFrame._nameText:Show()
+    else
+        if barFrame._nameText then barFrame._nameText:Hide() end
+    end
+
+    if isRing then
+        barFrame._icon:ClearAllPoints()
+        barFrame._icon:SetPoint("CENTER", barFrame, "CENTER", 0, 0)
+        
+        barFrame._segContainer:ClearAllPoints()
+        barFrame._segContainer:SetAllPoints(barFrame)
+        
+        -- Ring mode handles its own background in CreateSegments, hide main bg
+        barFrame.bg:Hide()
+    else
+        barFrame._icon:ClearAllPoints()
+        barFrame._icon:SetPoint("LEFT", barFrame, "LEFT", 0, 0)
+        barFrame.bg:Show()
+
+        local segOffset = showIcon and (iconSize + 2) or 0
+        barFrame._segContainer:ClearAllPoints()
+        barFrame._segContainer:SetPoint("TOPLEFT", barFrame, "TOPLEFT", segOffset, 0)
+        barFrame._segContainer:SetPoint("BOTTOMRIGHT", barFrame, "BOTTOMRIGHT", 0, 0)
+    end
 
     local count
     if cfg.barType == "charge" then
@@ -689,7 +787,7 @@ function MB:ApplyStyle(barFrame)
     barFrame._text:SetPoint(ANCHOR_POINT[anchor] or anchor, barFrame._textHolder, ANCHOR_REL[anchor] or anchor, cfg.textOffsetX or -4, cfg.textOffsetY or 0)
     barFrame._text:SetJustifyH(AnchorToJustifyH(anchor))
 
-    if cfg.borderStyle ~= "segment" then
+    if cfg.borderStyle ~= "segment" and not isRing then
         MB.ApplyMaskAndBorderSettings(barFrame, cfg)
     elseif barFrame._borderFrame then
         barFrame._borderFrame:Hide()
@@ -921,6 +1019,8 @@ local function UpdateRegularCooldownBar(barFrame)
     ApplySegmentColors(barFrame, isOnCooldown and 0 or 1)
 
     if cfg.showText ~= false and barFrame._text then
+        -- 调整文字位置：如果是圆环且没有指定 offset，尝试居中
+        -- 这里只做简单的文字更新，位置在 ApplyStyle 处理
         if isOnCooldown and not isOnGCD and durObj then
             local remaining = durObj:GetRemainingDuration()
             local ok, result = pcall(function()
@@ -1135,23 +1235,43 @@ local function UpdateDurationBar(barFrame)
         local timerOK = pcall(function()
             local durObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
             if durObj then
-                -- 使用 SetTimerDuration 让 StatusBar 自动处理 secret values
-                seg:SetMinMaxValues(0, 1)
-                local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
-                local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.RemainingTime or 0
+                -- 如果是圆环 (CooldownFrame)
+                if seg._isRing then
+                    -- 只在需要刷新时更新 CooldownFrame，避免重复 SetCooldown 导致动画重置
+                    if barFrame._needsDurationRefresh then
+                        -- CooldownFrame 可以直接 SetCooldownFromDurationObject
+                        if seg.SetCooldownFromDurationObject then
+                             seg:SetCooldownFromDurationObject(durObj)
+                        else
+                             -- Fallback: 尝试手动获取并设置
+                             local start = durObj:GetCooldownStartTime()
+                             local duration = durObj:GetCooldownDuration()
+                             seg:SetCooldown(start, duration)
+                        end
+                        barFrame._needsDurationRefresh = false
+                    end
+                else
+                    -- 使用 SetTimerDuration 让 StatusBar 自动处理 secret values
+                    seg:SetMinMaxValues(0, 1)
+                    local interpolation = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut or 0
+                    local direction = Enum.StatusBarTimerDirection and Enum.StatusBarTimerDirection.RemainingTime or 0
 
-                if seg.SetTimerDuration then
-                    seg:SetTimerDuration(durObj, interpolation, direction)
-                    if seg.SetToTargetValue then
-                        seg:SetToTargetValue()
+                    if seg.SetTimerDuration then
+                        seg:SetTimerDuration(durObj, interpolation, direction)
+                        if seg.SetToTargetValue then
+                            seg:SetToTargetValue()
+                        end
                     end
                 end
 
                 -- 应用颜色（基于剩余时间的阈值）
-                -- 注意：这里不能直接读取剩余时间来比较，需要使用其他方法
                 -- 暂时使用默认颜色
                 local c = cfg.barColor or { 0.2, 0.8, 0.2, 1 }
-                seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
+                if seg._isRing then
+                    seg:SetSwipeColor(c[1], c[2], c[3], c[4])
+                else
+                    seg:SetStatusBarColor(c[1], c[2], c[3], c[4])
+                end
 
                 -- 更新文本显示
                 if cfg.showText ~= false and barFrame._text then
@@ -1169,8 +1289,16 @@ local function UpdateDurationBar(barFrame)
 
         if not timerOK then
             -- 无法使用 SetTimerDuration，显示为满
-            seg:SetMinMaxValues(0, 1)
-            seg:SetValue(1)
+            if seg._isRing then
+                if barFrame._needsDurationRefresh then
+                    -- 强制满显示
+                    seg:SetCooldown(GetTime(), 3600) 
+                    barFrame._needsDurationRefresh = false
+                end
+            else
+                seg:SetMinMaxValues(0, 1)
+                seg:SetValue(1)
+            end
 
             if cfg.showText ~= false and barFrame._text then
                 barFrame._text:SetText("")
@@ -1181,8 +1309,15 @@ local function UpdateDurationBar(barFrame)
         barFrame._trackedAuraInstanceID = nil
         barFrame._trackedUnit = nil
 
-        seg:SetMinMaxValues(0, 1)
-        seg:SetValue(0)
+        if seg._isRing then
+            if barFrame._needsDurationRefresh then
+                seg:SetCooldown(0, 0) -- 隐藏 Swipe
+                barFrame._needsDurationRefresh = false
+            end
+        else
+            seg:SetMinMaxValues(0, 1)
+            seg:SetValue(0)
+        end
 
         if cfg.showText ~= false and barFrame._text then
             barFrame._text:SetText("")
@@ -1478,6 +1613,13 @@ function MB:OnCooldownUpdate()
 end
 
 function MB:OnAuraUpdate(unit)
+    for _, f in pairs(activeFrames) do
+        if f._cfg and f._cfg.barType == "duration" then
+             if f._cfg.unit == unit or (f._cfg.unit == nil and unit == "player") then
+                 f._needsDurationRefresh = true
+             end
+        end
+    end
 end
 
 function MB:OnSkyridingChanged()

@@ -328,6 +328,18 @@ local S = {
     mbStyleThick        = { "粗",               "Thick" },
     mbStyleNone         = { "无",               "None" },
 
+    -- 圆环模式相关
+    mbBarShape          = { "条形状",           "Bar Shape" },
+    mbShapeBar          = { "条形",             "Bar" },
+    mbShapeRing         = { "圆环",             "Ring" },
+    mbRingSize          = { "圆环大小",         "Ring Size" },
+    mbRingThickness     = { "圆环粗细",         "Ring Thickness" },
+    mbShowSpellName     = { "显示技能名称",     "Show Spell Name" },
+    mbNameAnchor        = { "名称位置",         "Name Position" },
+    mbNameOffsetX       = { "名称X偏移",        "Name X Offset" },
+    mbNameOffsetY       = { "名称Y偏移",        "Name Y Offset" },
+    mbNameFontSize      = { "名称字号",         "Name Font Size" },
+
     -- 增益自定义分组
     buffGroups          = { "buff分组",         "Buff Groups" },
     classAll            = { "全部职业",         "All Classes" },

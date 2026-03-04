@@ -141,6 +141,7 @@ local function NewBarDefaults(id, barType, spellID, spellName, unit)
         frameStrata     = "MEDIUM",
         textAnchor      = "RIGHT",
         smoothAnimation = true,
+        ringThickness   = 10,
         specs           = { GetSpecialization() or 1 },
     }
 end
@@ -217,10 +218,54 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     typeDD:SetFullWidth(true)
     typeDD:SetCallback("OnValueChanged", function(_, _, val)
         barCfg.barType = val
+        -- Reset shape to Bar when changing type, or keep it if duration
+        if val ~= "duration" then
+            barCfg.barShape = "Bar"
+        end
         MB:RebuildAllBars()
         rebuildAll()
     end)
     container:AddChild(typeDD)
+
+    -- Bar Shape (Only for Duration)
+    if barCfg.barType == "duration" then
+        local shapeDD = AceGUI:Create("Dropdown")
+        shapeDD:SetLabel(L.mbBarShape or "Bar Shape")
+        shapeDD:SetList({ ["Bar"] = L.mbShapeBar or "Bar", ["Ring"] = L.mbShapeRing or "Ring" }, { "Bar", "Ring" })
+        shapeDD:SetValue(barCfg.barShape or "Bar")
+        shapeDD:SetFullWidth(true)
+        shapeDD:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.barShape = val
+            MB:RebuildAllBars()
+            rebuildAll() -- Rebuild to update width/height sliders visibility
+        end)
+        container:AddChild(shapeDD)
+
+        if barCfg.barShape == "Ring" then
+            local sizeSlider = AceGUI:Create("Slider")
+            sizeSlider:SetLabel(L.mbRingSize or "Ring Size")
+            sizeSlider:SetSliderValues(20, 500, 1)
+            sizeSlider:SetValue(barCfg.width)
+            sizeSlider:SetFullWidth(true)
+            sizeSlider:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.width = RoundToOneDecimal(val)
+                barCfg.height = barCfg.width -- Keep aspect ratio
+                MB:RebuildAllBars()
+            end)
+            container:AddChild(sizeSlider)
+
+            local thickDD = AceGUI:Create("Dropdown")
+            thickDD:SetLabel(L.mbRingThickness or "Ring Thickness")
+            thickDD:SetList({ [10] = "10px", [20] = "20px", [30] = "30px", [40] = "40px" }, { 10, 20, 30, 40 })
+            thickDD:SetValue(barCfg.ringThickness or 10)
+            thickDD:SetFullWidth(true)
+            thickDD:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.ringThickness = val
+                MB:RebuildAllBars()
+            end)
+            container:AddChild(thickDD)
+        end
+    end
 
     local classItems, classOrder = GetClassItems()
     local classDD = AceGUI:Create("Dropdown")
@@ -431,40 +476,46 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
     end)
     styleGroup:AddChild(strataDD)
 
-    local wSlider = AceGUI:Create("Slider")
-    wSlider:SetLabel(L.mbBarWidth)
-    wSlider:SetSliderValues(60, 500, 0.1)
-    wSlider:SetValue(barCfg.width)
-    wSlider:SetFullWidth(true)
-    wSlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.width = RoundToOneDecimal(val)
-        MB:RebuildAllBars()
-    end)
-    styleGroup:AddChild(wSlider)
-
-    local hSlider = AceGUI:Create("Slider")
-    hSlider:SetLabel(L.mbBarHeight)
-    hSlider:SetSliderValues(6, 60, 0.1)
-    hSlider:SetValue(barCfg.height)
-    hSlider:SetFullWidth(true)
-    hSlider:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.height = RoundToOneDecimal(val)
-        MB:RebuildAllBars()
-    end)
-    styleGroup:AddChild(hSlider)
-
-    local texItems, texOrder = GetTextureItems()
-    if next(texItems) then
-        local texDD = AceGUI:Create("Dropdown")
-        texDD:SetLabel(L.mbBarTexture)
-        texDD:SetList(texItems, texOrder)
-        texDD:SetValue(barCfg.barTexture or "Solid")
-        texDD:SetFullWidth(true)
-        texDD:SetCallback("OnValueChanged", function(_, _, val)
-            barCfg.barTexture = val
+    if barCfg.barShape ~= "Ring" then
+        local wSlider = AceGUI:Create("Slider")
+        wSlider:SetLabel(L.mbBarWidth)
+        wSlider:SetSliderValues(20, 500, 1)
+        wSlider:SetValue(barCfg.width)
+        wSlider:SetFullWidth(true)
+        wSlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.width = RoundToOneDecimal(val)
             MB:RebuildAllBars()
         end)
-        styleGroup:AddChild(texDD)
+        styleGroup:AddChild(wSlider)
+    end
+
+    if barCfg.barShape ~= "Ring" then
+        local hSlider = AceGUI:Create("Slider")
+        hSlider:SetLabel(L.mbBarHeight)
+        hSlider:SetSliderValues(6, 60, 0.1)
+        hSlider:SetValue(barCfg.height)
+        hSlider:SetFullWidth(true)
+        hSlider:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.height = RoundToOneDecimal(val)
+            MB:RebuildAllBars()
+        end)
+        styleGroup:AddChild(hSlider)
+    end
+
+    if barCfg.barShape ~= "Ring" then
+        local texItems, texOrder = GetTextureItems()
+        if next(texItems) then
+            local texDD = AceGUI:Create("Dropdown")
+            texDD:SetLabel(L.mbBarTexture)
+            texDD:SetList(texItems, texOrder)
+            texDD:SetValue(barCfg.barTexture or "Solid")
+            texDD:SetFullWidth(true)
+            texDD:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.barTexture = val
+                MB:RebuildAllBars()
+            end)
+            styleGroup:AddChild(texDD)
+        end
     end
 
     local barColorPicker = AceGUI:Create("ColorPicker")
@@ -633,15 +684,80 @@ local function BuildBarConfig(container, barCfg, rebuildAll)
         styleGroup:AddChild(gapSlider)
     end
 
-    local iconCB = AceGUI:Create("CheckBox")
-    iconCB:SetLabel(L.mbShowIcon)
-    iconCB:SetValue(barCfg.showIcon ~= false)
-    iconCB:SetFullWidth(true)
-    iconCB:SetCallback("OnValueChanged", function(_, _, val)
-        barCfg.showIcon = val
-        MB:RebuildAllBars()
-    end)
-    styleGroup:AddChild(iconCB)
+    if barCfg.barShape ~= "Ring" then
+        local iconCB = AceGUI:Create("CheckBox")
+        iconCB:SetLabel(L.mbShowIcon)
+        iconCB:SetValue(barCfg.showIcon ~= false)
+        iconCB:SetFullWidth(true)
+        iconCB:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.showIcon = val
+            MB:RebuildAllBars()
+        end)
+        styleGroup:AddChild(iconCB)
+    else
+        local nameCB = AceGUI:Create("CheckBox")
+        nameCB:SetLabel(L.mbShowSpellName or "Show Spell Name")
+        nameCB:SetValue(barCfg.showSpellName or false)
+        nameCB:SetFullWidth(true)
+        nameCB:SetCallback("OnValueChanged", function(_, _, val)
+            barCfg.showSpellName = val
+            MB:RebuildAllBars()
+            rebuildAll()
+        end)
+        styleGroup:AddChild(nameCB)
+
+        if barCfg.showSpellName then
+            local nameGroup = AceGUI:Create("InlineGroup")
+            nameGroup:SetTitle(L.mbSpellName or "Spell Name")
+            nameGroup:SetFullWidth(true)
+            nameGroup:SetLayout("Flow")
+            styleGroup:AddChild(nameGroup)
+
+            local nAnchorDD = AceGUI:Create("Dropdown")
+            nAnchorDD:SetLabel(L.mbNameAnchor or "Name Anchor")
+            nAnchorDD:SetList(TEXT_ANCHOR_ITEMS, TEXT_ANCHOR_ORDER)
+            nAnchorDD:SetValue(barCfg.nameAnchor or "CENTER")
+            nAnchorDD:SetFullWidth(true)
+            nAnchorDD:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.nameAnchor = val
+                Refresh()
+            end)
+            nameGroup:AddChild(nAnchorDD)
+
+            local nTxSlider = AceGUI:Create("Slider")
+            nTxSlider:SetLabel(L.mbNameOffsetX or "Name Offset X")
+            nTxSlider:SetSliderValues(-50, 50, 1)
+            nTxSlider:SetValue(barCfg.nameOffsetX or 0)
+            nTxSlider:SetFullWidth(true)
+            nTxSlider:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.nameOffsetX = math.floor(val)
+                Refresh()
+            end)
+            nameGroup:AddChild(nTxSlider)
+
+            local nTySlider = AceGUI:Create("Slider")
+            nTySlider:SetLabel(L.mbNameOffsetY or "Name Offset Y")
+            nTySlider:SetSliderValues(-50, 50, 1)
+            nTySlider:SetValue(barCfg.nameOffsetY or 0)
+            nTySlider:SetFullWidth(true)
+            nTySlider:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.nameOffsetY = math.floor(val)
+                Refresh()
+            end)
+            nameGroup:AddChild(nTySlider)
+
+            local nFontSizeSlider = AceGUI:Create("Slider")
+            nFontSizeSlider:SetLabel(L.mbNameFontSize or "Name Font Size")
+            nFontSizeSlider:SetSliderValues(6, 24, 1)
+            nFontSizeSlider:SetValue(barCfg.nameFontSize or 12)
+            nFontSizeSlider:SetFullWidth(true)
+            nFontSizeSlider:SetCallback("OnValueChanged", function(_, _, val)
+                barCfg.nameFontSize = math.floor(val)
+                Refresh()
+            end)
+            nameGroup:AddChild(nFontSizeSlider)
+        end
+    end
 
     local textCB = AceGUI:Create("CheckBox")
     local showTextLabel
