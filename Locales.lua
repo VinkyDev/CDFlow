@@ -35,6 +35,7 @@ local S = {
     spacingX        = { "列间距",       "Column Spacing" },
     spacingY        = { "行间距",       "Row Spacing" },
     iconBeautify    = { "启用图标美化", "Enable Icon Beautification" },
+    masqueActiveHint = { "图标缩放和边框设置由 Masque 接管", "Icon zoom and border settings are managed by Masque" },
     iconZoom        = { "图标裁剪",     "Icon Zoom" },
     borderSize      = { "边框粗细",     "Border Size" },
     suppressDebuffBorder = { "屏蔽 Debuff 红框", "Suppress Debuff Border" },

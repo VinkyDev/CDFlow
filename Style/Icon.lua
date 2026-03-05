@@ -63,13 +63,16 @@ end
 function Style:ApplyIcon(button, w, h, zoom, borderSize)
     if not button or not button.Icon then return end
 
+    -- 检查 Masque 是否激活
+    local masqueActive = ns.Masque and ns.Masque:IsActive()
+
     if ns.db and ns.db.iconBeautify == false then
         if button._cdf_w ~= w or button._cdf_h ~= h then
             button:SetSize(w, h)
             button._cdf_w = w
             button._cdf_h = h
         end
-        
+
         if button._cdf_styled then
             if button.Icon.SetTexCoord then button.Icon:SetTexCoord(0, 1, 0, 1) end
             if button._cdf_border then button._cdf_border:Hide() end
@@ -94,15 +97,62 @@ function Style:ApplyIcon(button, w, h, zoom, borderSize)
 
     EnsureIconCaches(button)
 
+    -- 设置按钮大小(无论是否使用 Masque 都需要)
     if button._cdf_w ~= w or button._cdf_h ~= h then
         button:SetSize(w, h)
         button._cdf_w = w
         button._cdf_h = h
     end
 
+    -- Masque 激活时:注册按钮,隐藏原生边框,让 Masque 接管样式
+    if masqueActive then
+        if not button._cdf_masqueRegistered then
+            ns.Masque:RegisterButton(button, button.Icon, button._cdf_border)
+            button._cdf_masqueRegistered = true
+        end
+
+        -- 隐藏原生边框
+        if button._cdf_border then
+            button._cdf_border:Hide()
+        end
+
+        -- 隐藏 overlay 和 round mask
+        for _, region in ipairs(button._cdf_overlayRegions) do
+            if region:GetAlpha() ~= 0 then
+                region:SetAlpha(0)
+            end
+        end
+        for _, region in ipairs(button._cdf_roundMaskRegions) do
+            if not region._cdf_replaced then
+                region:SetTexture(SQUARE_MASK)
+                region._cdf_replaced = true
+            end
+        end
+
+        button._cdf_styled = true
+
+        -- 处理 Debuff 边框
+        if button.DebuffBorder then
+            local suppress = ns.db and ns.db.suppressDebuffBorder
+            local targetAlpha = suppress and 0 or 1
+            if button.DebuffBorder:GetAlpha() ~= targetAlpha then
+                button.DebuffBorder:SetAlpha(targetAlpha)
+            end
+        end
+
+        return
+    end
+
+    -- Masque 未激活时:清理 Masque 纹理,应用原生样式
+    if ns.Masque and ns.Masque:IsInstalled() then
+        ns.Masque:CleanupMasqueTextures(button, button.Icon, button._cdf_border)
+    end
+
+    -- 应用原生样式
     local crop = zoom * 0.5
     local ratio = w / h
-    if not button._cdf_iconAnchored then
+    if not button._cdf_iconAnchored or masqueActive == false then
+        -- 当从 Masque 切换回原生样式时,需要重新锚定图标
         button.Icon:ClearAllPoints()
         button.Icon:SetAllPoints(button)
         button._cdf_iconAnchored = true

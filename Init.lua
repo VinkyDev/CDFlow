@@ -695,6 +695,11 @@ initFrame:SetScript("OnEvent", function(_, _, addonName)
                 SetupBuffViewerHooks()
                 Layout:InitBuffGroups()  -- 容器必须在 RefreshAll 前就绪
                 Layout:RefreshAll()
+
+                -- 强制刷新 Masque 皮肤，解决 reload 后部分按钮未正确应用皮肤的问题
+                if ns.Masque and ns.Masque:IsActive() then
+                    ns.Masque:ReSkin()
+                end
             end
             if mods.trackedBars then
                 HookTrackedBarChildren()

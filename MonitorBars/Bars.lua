@@ -166,6 +166,7 @@ local function GetArcDetector(barFrame, threshold)
     det:SetAlpha(0)
     det:SetStatusBarTexture(BAR_TEXTURE)
     det:SetMinMaxValues(threshold - 1, threshold)
+    det:EnableMouse(false)  -- 禁用鼠标交互以支持点击穿透
     ConfigureStatusBar(det)
     barFrame._arcDetectors[threshold] = det
     return det
@@ -198,6 +199,7 @@ local function GetOrCreateShadowCooldown(barFrame)
     cd:SetDrawBling(false)
     cd:SetHideCountdownNumbers(true)
     cd:SetAlpha(0)
+    cd:EnableMouse(false)  -- 禁用鼠标交互以支持点击穿透
     barFrame._shadowCooldown = cd
     return cd
 end
@@ -323,7 +325,7 @@ local function CreateSegments(barFrame, count, cfg)
 
         -- 使用 CooldownFrame 作为进度显示
         -- 技巧：将 SwipeTexture 设置为圆环纹理，并染色为 barColor
-        -- CooldownFrame 默认显示“冷却中”的黑色阴影，但我们可以通过 SetSwipeColor 改变它
+        -- CooldownFrame 默认显示”冷却中”的黑色阴影，但我们可以通过 SetSwipeColor 改变它
         -- 并且利用冷却倒计时（从满到空）来模拟 buff 剩余时间（从满到空）
         local cd = CreateFrame("Cooldown", nil, container, "CooldownFrameTemplate")
         cd:SetAllPoints()
@@ -333,6 +335,7 @@ local function CreateSegments(barFrame, count, cfg)
         cd:SetSwipeColor(barColor[1], barColor[2], barColor[3], barColor[4])
         cd:SetHideCountdownNumbers(true)
         cd:SetUseCircularEdge(false) -- 关闭圆形边缘裁剪，确保纹理完整显示
+        cd:EnableMouse(false)  -- 禁用鼠标交互以支持点击穿透
         cd:Show()
         
         -- 标记这是一个 Ring Segment，方便后续识别
@@ -366,6 +369,7 @@ local function CreateSegments(barFrame, count, cfg)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(0)
         bar:SetFrameLevel(container:GetFrameLevel() + 1)
+        bar:EnableMouse(false)  -- 禁用鼠标交互以支持点击穿透
         ConfigureStatusBar(bar)
         
         if barFrame._mask then
@@ -382,6 +386,7 @@ local function CreateSegments(barFrame, count, cfg)
             })
             border:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
             border:SetFrameLevel(bar:GetFrameLevel() + 2)
+            border:EnableMouse(false)  -- 禁用鼠标交互以支持点击穿透
             border:Show()
             barFrame._segBorders[i] = border
         end
@@ -462,6 +467,7 @@ function MB:CreateBarFrame(barCfg)
     f._borderFrame = CreateFrame("Frame", nil, f)
     f._borderFrame:SetAllPoints()
     f._borderFrame:SetFrameLevel(f:GetFrameLevel() + 5)
+    f._borderFrame:EnableMouse(false)  -- 禁用鼠标交互以支持点击穿透
     f._border = f._borderFrame:CreateTexture(nil, "OVERLAY")
     f._border:SetAllPoints()
     f._border:SetBlendMode("BLEND")
@@ -479,10 +485,12 @@ function MB:CreateBarFrame(barCfg)
     f._segContainer:SetPoint("TOPLEFT", f, "TOPLEFT", segOffset, 0)
     f._segContainer:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
     f._segContainer:SetFrameLevel(f:GetFrameLevel() + 1)
+    f._segContainer:EnableMouse(false)  -- 禁用鼠标交互以支持点击穿透
 
     f._textHolder = CreateFrame("Frame", nil, f)
     f._textHolder:SetAllPoints(f._segContainer)
     f._textHolder:SetFrameLevel(f:GetFrameLevel() + 6)
+    f._textHolder:EnableMouse(false)  -- 禁用鼠标交互以支持点击穿透
 
     f._text = f._textHolder:CreateFontString(nil, "OVERLAY")
     local fontPath = ResolveFontPath(barCfg.fontName)
@@ -506,9 +514,12 @@ function MB:CreateBarFrame(barCfg)
         frame._posLabel:SetFormattedText("X: %.1f  Y: %.1f", cfg.posX or 0, cfg.posY or 0)
     end
 
-    f:EnableMouse(true)
     f:SetMovable(true)
     f:RegisterForDrag("LeftButton")
+
+    -- 初始化鼠标交互状态（解锁时启用，锁定时禁用以实现点击穿透）
+    local locked = ns.db and ns.db.monitorBars and ns.db.monitorBars.locked
+    f:EnableMouse(not locked)
     f:SetScript("OnDragStart", function(self)
         if ns.db.monitorBars.locked then return end
         
@@ -629,6 +640,8 @@ function MB:CreateBarFrame(barCfg)
     if not locked then
         UpdatePosLabel(f)
         f._posLabel:Show()
+    else
+        f._posLabel:Hide()
     end
 
     f._cfg = barCfg
@@ -1530,6 +1543,12 @@ function MB:InitAllBars()
     end
 
     updateFrame:Show()
+
+    -- 初始化完成后，根据当前锁定状态设置所有框架的鼠标交互
+    local locked = ns.db.monitorBars.locked
+    if locked ~= nil then
+        self:SetLocked(locked)
+    end
 end
 
 function MB:DestroyBar(barID)
@@ -1645,6 +1664,7 @@ end
 function MB:SetLocked(locked)
     ns.db.monitorBars.locked = locked
     for _, f in pairs(activeFrames) do
+        -- 更新鼠标交互状态：锁定时禁用（点击穿透），解锁时启用
         f:EnableMouse(not locked)
         f:EnableMouseWheel(not locked)
         if f._posLabel then

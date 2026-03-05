@@ -93,13 +93,27 @@ function ns.BuildGeneralTab(scroll)
             function() return ns.db.iconBeautify end,
             function(v) ns.db.iconBeautify = v end)
 
-        UI.AddSlider(scroll, L.iconZoom, 0, 0.3, 0.01,
-            function() return ns.db.iconZoom end,
-            function(v) ns.db.iconZoom = v end)
+        -- Masque 提示信息
+        if ns.Masque and ns.Masque:IsActive() then
+            local masqueLabel = AceGUI:Create("Label")
+            masqueLabel:SetText("|cffffaa00" .. L.masqueActiveHint .. "|r")
+            masqueLabel:SetFullWidth(true)
+            masqueLabel:SetFontObject(GameFontHighlight)
+            scroll:AddChild(masqueLabel)
+        end
 
-        UI.AddSlider(scroll, L.borderSize, 0, 4, 1,
-            function() return ns.db.borderSize end,
-            function(v) ns.db.borderSize = v end)
+        -- 当 Masque 激活时,禁用 zoom 和 border 设置
+        local masqueActive = ns.Masque and ns.Masque:IsActive()
+
+        if not masqueActive then
+            UI.AddSlider(scroll, L.iconZoom, 0, 0.3, 0.01,
+                function() return ns.db.iconZoom end,
+                function(v) ns.db.iconZoom = v end)
+
+            UI.AddSlider(scroll, L.borderSize, 0, 4, 1,
+                function() return ns.db.borderSize end,
+                function(v) ns.db.borderSize = v end)
+        end
 
         UI.AddCheckbox(scroll, L.suppressDebuffBorder,
             function() return ns.db.suppressDebuffBorder or false end,
