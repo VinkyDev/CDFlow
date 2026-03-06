@@ -6,6 +6,10 @@ local AceGUI
 
 local CHANGELOG = {
     {
+        "v3.4.4",
+        "Buff分组新增饰品与药水组"
+    },
+    {
         "v3.4.3",
         "监控条支持点击穿透",
         "图标美化增加开关，提供完整的Masque支持"
