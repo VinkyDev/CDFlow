@@ -39,6 +39,7 @@ Modules loaded in order via `CDFlow.toc` (after `Libs/libs.xml`):
 ### Layout/
 - `Layout.lua` — multi-row layout engine for Essential/Utility viewers; base layout logic
 - `Layout/BuffGroups.lua` — Custom buff grouping logic and layout
+- `Layout/BuffGroup0.lua` — Special Group 0 for trinkets & potions (item-based monitoring)
 - `Layout/BuffCentering.lua` — Dynamic centering system for buffs
 - `Layout/TrackedBars.lua` — Layout and styling for tracked status bars (BuffBarCooldownViewer)
 

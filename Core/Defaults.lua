@@ -225,8 +225,22 @@ ns.defaults = {
 
     -- 增益自定义分组
     -- 每个元素：{ name, horizontal, x, y, spellIDs={[spellID]=true} }
-    buffGroupsLocked = false,
+    buffGroupsLocked = true,
     buffGroups = {},
+
+    -- 0号组：饰品&药水（特殊组，基于物品ID监控）
+    buffGroup0 = {
+        enabled           = true,   -- 是否启用0号组
+        autoTrinkets      = true,   -- 自动检测主动饰品
+        potionItemIDs     = { 212265, 241308, 241288, 241296, 241292 }, -- 药水物品ID列表
+        name              = nil,    -- 自定义名称
+        horizontal        = false,
+        x                 = 100,
+        y                 = 0,
+        overrideSize      = true,
+        iconWidth         = 32,
+        iconHeight        = 32,
+    },
 
     -- 物品监控
     itemMonitor = {

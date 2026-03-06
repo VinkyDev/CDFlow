@@ -368,6 +368,10 @@ function Layout:SetBuffGroupsLocked(locked)
             UpdateContainerLock(container, group)
         end
     end
+    -- 同时应用到0号组
+    if self.SetBuffGroup0Locked then
+        self:SetBuffGroup0Locked(locked)
+    end
 end
 
 -- 当特定分组被添加/删除时重建
