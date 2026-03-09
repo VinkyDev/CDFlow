@@ -41,7 +41,11 @@ function MasqueIntegration:RegisterButton(button, icon, border)
 
     -- 注册到 Masque
     local buttonData = {
-        Icon = icon,
+        Icon = icon or button.Icon,
+        -- CDFlow 注册给 Masque 的主体是 Frame，strict 模式下不会自动发现冷却区域。
+        -- 因此必须显式传递 Cooldown/ChargeCooldown，皮肤的 Cooldown 层才能生效。
+        Cooldown = button.Cooldown or button.cooldown,
+        ChargeCooldown = button.chargeCooldown or button.ChargeCooldown,
     }
 
     -- 如果有边框,也注册边框(作为 Normal 纹理)
