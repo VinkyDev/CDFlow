@@ -106,10 +106,9 @@ function Style:ApplyIcon(button, w, h, zoom, borderSize)
 
     -- Masque 激活时:注册按钮,隐藏原生边框,让 Masque 接管样式
     if masqueActive then
-        if not button._cdf_masqueRegistered then
-            ns.Masque:RegisterButton(button, button.Icon, button._cdf_border)
-            button._cdf_masqueRegistered = true
-        end
+        -- 总是重新注册/刷新按钮，确保对象池复用的按钮能正确应用皮肤
+        ns.Masque:RegisterButton(button, button.Icon, button._cdf_border)
+        button._cdf_masqueRegistered = true
 
         -- 隐藏原生边框
         if button._cdf_border then

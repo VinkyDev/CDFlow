@@ -34,10 +34,8 @@ function MasqueIntegration:RegisterButton(button, icon, border)
         return
     end
 
-    -- 避免重复注册
-    if self.registeredButtons[button] then
-        return
-    end
+    -- 即使已经注册过，也重新 AddButton 以确保皮肤状态正确（解决对象池复用导致的皮肤丢失问题）
+    -- Masque 的 AddButton 操作会刷新皮肤
 
     -- 注册到 Masque
     local buttonData = {
