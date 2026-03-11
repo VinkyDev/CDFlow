@@ -343,26 +343,44 @@ local function LockBuffViewerEditMode()
         end
         if not IsCooldownViewerSystemFrame(viewer) then return false end
 
-        -- 阻止系统设置面板打开：当目标为 BuffIconCooldownViewer 时隐藏
-        hooksecurefunc(EditModeSystemSettingsDialog, "AttachToSystemFrame", function(dialog, systemFrame)
-            if systemFrame ~= viewer then return end
-            dialog:Hide()
-        end)
+        -- 筛选设置项：只保留 Checkbox (对应 Show/Hide, Tooltips, Numbers 等开关)
+        -- 隐藏 Slider (Size, Padding) 和 Dropdown (Orientation, Grow Direction)
+        if EditModeSystemSettingsDialog.UpdateDialog then
+            hooksecurefunc(EditModeSystemSettingsDialog, "UpdateDialog", function(dialog, systemFrame)
+                if systemFrame ~= viewer then return end
+                
+                local container = dialog.Settings
+                if not container then return end
+                
+                -- 辅助函数：判断是否为 Checkbox 设置项
+                local function IsCheckboxSetting(frame)
+                    -- CheckboxTemplate 通常包含一个 CheckButton 类型的 .Button
+                    if frame.Button and frame.Button:IsObjectType("CheckButton") then return true end
+                    -- 或者它本身就是 CheckButton
+                    if frame:IsObjectType("CheckButton") then return true end
+                    -- 兜底：遍历子元素寻找 CheckButton
+                    for _, child in ipairs({frame:GetChildren()}) do
+                        if child:IsObjectType("CheckButton") then return true end
+                    end
+                    return false
+                end
 
-        -- 阻止拖拽
-        viewer:SetMovable(false)
-        local selection = viewer.Selection
-        if selection then
-            selection:SetScript("OnDragStart", nil)
-            selection:SetScript("OnDragStop", nil)
+                for _, child in ipairs({ container:GetChildren() }) do
+                    if child:IsShown() and not IsCheckboxSetting(child) then
+                        child:Hide()
+                    end
+                end
+                
+                if container.Layout then container:Layout() end
+                if dialog.Layout then dialog:Layout() end
+            end)
         end
 
-        -- hook SelectSystem：阻止选择并隐藏设置面板
+        -- 允许拖拽（不锁定位置）
+        local selection = viewer.Selection
+
+        -- hook SelectSystem：同步 selection 尺寸
         hooksecurefunc(viewer, "SelectSystem", function(sf)
-            sf:SetMovable(false)
-            if EditModeSystemSettingsDialog.attachedToSystem == sf then
-                EditModeSystemSettingsDialog:Hide()
-            end
             SyncBuffViewerSelectionSize()
         end)
 
@@ -370,36 +388,6 @@ local function LockBuffViewerEditMode()
         hooksecurefunc(viewer, "HighlightSystem", function()
             SyncBuffViewerSelectionSize()
         end)
-
-        -- hook HighlightSystem / ClearHighlight 显示/隐藏锁定提示
-        if selection then
-            local lockText
-            local function EnsureLockText()
-                if lockText then return lockText end
-                local overlay = CreateFrame("Frame", nil, UIParent)
-                overlay:SetAllPoints(selection)
-                overlay:SetFrameStrata(selection:GetFrameStrata())
-                overlay:SetFrameLevel(selection:GetFrameLevel() + 5)
-                lockText = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-                lockText:SetPoint("CENTER", overlay, "CENTER", 0, -30)
-                lockText:SetTextColor(0.99, 0.07, 0, 1)
-                lockText:SetText(L.buffEditModeLocked or "Edit Mode locked - use /cdf")
-                lockText:Hide()
-                overlay:Show()
-                return lockText
-            end
-
-            selection:HookScript("OnMouseDown", function()
-                local t = EnsureLockText()
-                t:Show()
-                C_Timer.After(6, function()
-                    if t then t:Hide() end
-                end)
-            end)
-            selection:HookScript("OnHide", function()
-                if lockText then lockText:Hide() end
-            end)
-        end
 
         buffViewerEditModeLocked = true
         return true
