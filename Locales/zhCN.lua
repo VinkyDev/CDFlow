@@ -494,3 +494,6 @@ ns.LocaleData["zhCN"] = {
     moduleTTSD = "覆盖冷却管理器的「文本转语音」警报，自定义播报文字或音效文件",
 }
 
+ns.LocaleData["zhTW"] = ns.LocaleData["zhCN"]
+
+
