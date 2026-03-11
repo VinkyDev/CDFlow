@@ -76,6 +76,30 @@ local function BuildSpellToKeyMap()
             map[spellID] = key
         end
     end
+
+    local function ProcessSlot(slot, key)
+        if not key then return end
+        local kind, id, subType = GetActionInfo(slot)
+        if kind == "spell" and id then
+            add(id, key)
+            local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(id)
+            if override then add(override, key) end
+        elseif kind == "macro" and id then
+            if subType == "spell" then
+                add(id, key)
+                local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(id)
+                if override then add(override, key) end
+            else
+                local macroSpell = GetMacroSpell and GetMacroSpell(id)
+                if macroSpell then
+                    add(macroSpell, key)
+                    local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(macroSpell)
+                    if override then add(override, key) end
+                end
+            end
+        end
+    end
+
     for barIdx, prefix in ipairs(KEYBIND_BAR_PREFIXES) do
         local bindPrefix = KEYBIND_BINDING_NAMES[barIdx]
         for i = 1, 12 do
@@ -84,30 +108,26 @@ local function BuildSpellToKeyMap()
                 local slot = btn.action
                 local cmd = bindPrefix .. i
                 local key = GetBindingKey(cmd)
-                if key then
-                    local kind, id, subType = GetActionInfo(slot)
-                    if kind == "spell" and id then
-                        add(id, key)
-                        local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(id)
-                        if override then add(override, key) end
-                    elseif kind == "macro" and id then
-                        if subType == "spell" then
-                            add(id, key)
-                            local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(id)
-                            if override then add(override, key) end
-                        else
-                            local macroSpell = GetMacroSpell and GetMacroSpell(id)
-                            if macroSpell then
-                                add(macroSpell, key)
-                                local override = C_Spell and C_Spell.GetOverrideSpell and C_Spell.GetOverrideSpell(macroSpell)
-                                if override then add(override, key) end
-                            end
-                        end
-                    end
+                ProcessSlot(slot, key)
+            end
+        end
+    end
+
+    -- ElvUI Support
+    if _G["ElvUI_Bar1Button1"] then
+        for i = 1, 15 do
+            local barName = "ElvUI_Bar" .. i .. "Button"
+            for j = 1, 12 do
+                local btn = _G[barName .. j]
+                if btn and btn.action and btn.config and btn.config.keyBoundTarget then
+                    local slot = btn.action
+                    local key = GetBindingKey(btn.config.keyBoundTarget)
+                    ProcessSlot(slot, key)
                 end
             end
         end
     end
+
     return map
 end
 
