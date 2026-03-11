@@ -42,6 +42,8 @@ function MasqueIntegration:RegisterButton(button, icon, border)
     -- 注册到 Masque
     local buttonData = {
         Icon = icon,
+        Cooldown = button.Cooldown,
+        ChargeCooldown = button.ChargeCooldown,
     }
 
     -- 如果有边框,也注册边框(作为 Normal 纹理)
